@@ -19,6 +19,7 @@ type Querier interface {
 	CreatePlayer(ctx context.Context, arg CreatePlayerParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	GetAccountForLogin(ctx context.Context, email string) (GetAccountForLoginRow, error)
+	GetActiveVoyageForPlayer(ctx context.Context, playerID pgtype.UUID) (GetActiveVoyageForPlayerRow, error)
 	GetAuthenticatedSession(ctx context.Context, tokenDigest []byte) (GetAuthenticatedSessionRow, error)
 	GetBasketCalculationMapping(ctx context.Context, basketMappingVersionID pgtype.UUID) (GetBasketCalculationMappingRow, error)
 	GetBasketMetricByTideAndMapping(ctx context.Context, arg GetBasketMetricByTideAndMappingParams) (BasketMetric, error)

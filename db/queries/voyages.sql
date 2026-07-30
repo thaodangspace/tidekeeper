@@ -141,6 +141,14 @@ FROM voyages AS v
 JOIN players AS p ON p.current_voyage_id = v.id AND p.id = v.player_id
 WHERE p.id = sqlc.arg(player_id);
 
+-- name: GetActiveVoyageForPlayer :one
+SELECT v.id, v.public_id, v.player_id, v.status, v.voyage_definition_version_id,
+       v.current_day_number, v.fund_health, v.max_fund_health, v.capital, v.score,
+       v.row_version, v.started_at, v.completed_at, v.created_at, v.updated_at
+FROM voyages AS v
+WHERE v.player_id = sqlc.arg(player_id)
+  AND v.status = 'ACTIVE';
+
 -- name: UpdateVoyageStatus :one
 UPDATE voyages
 SET status = sqlc.arg(status),

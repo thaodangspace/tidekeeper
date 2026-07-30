@@ -115,6 +115,11 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        PERFORM voyage_definition_require_draft_status(OLD.voyage_definition_version_id);
+        PERFORM voyage_definition_require_draft_status(NEW.voyage_definition_version_id);
+        RETURN NEW;
+    END IF;
     PERFORM voyage_definition_require_draft_status(
         CASE WHEN TG_OP = 'DELETE' THEN OLD.voyage_definition_version_id
              ELSE NEW.voyage_definition_version_id
@@ -169,6 +174,45 @@ $$;
 CREATE TRIGGER voyage_definition_versions_published_immutable_trigger
     BEFORE UPDATE OR DELETE ON voyage_definition_versions
     FOR EACH ROW EXECUTE FUNCTION voyage_definition_guard_published_immutability();
+
+-- ── Standard MVP definition ────────────────────────────────────────────────
+-- Published with starter Hull=100, Supplies=10, 3 fleet slots, no starter
+-- Keepers (keeper definitions are not yet seeded). The initial shop is empty;
+-- the shop is populated by content publication as Keeper definitions are added.
+--
+
+INSERT INTO voyage_definition_versions (
+    id, definition_key, version, status, duration_days,
+    starting_hull, starting_supplies, fleet_slot_count, initial_phase,
+    launch_presentation, checksum, published_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'standard',
+    1,
+    'PUBLISHED',
+    7,
+    100,
+    10,
+    3,
+    'PREPARATION',
+    '{
+        "modifier":{"id":"mod_default","name":"Standard Conditions","description":"Default voyage conditions."},
+        "objective":{"id":"obj_default","name":"Navigate","description":"Complete the daily voyage.","progressLabel":null,"rewardLabel":null},
+        "signals":[],
+        "lineup":{
+            "lockedAt":null,"maxSlots":3,
+            "slots":[{"index":0,"keeper":null},{"index":1,"keeper":null},{"index":2,"keeper":null}],
+            "synergies":[],"warnings":[{"code":"EMPTY_SLOT","severity":"WARNING","message":"All slots are empty."}]
+        },
+        "inventory":[],
+        "shop":{"offers":[],"refreshAt":null,"rerollCost":2,"rerollIndex":0},
+        "strategies":[],
+        "selectedStrategyId":null,
+        "pendingRewardCount":0
+    }'::jsonb,
+    E'\\x7374616e64617264' || repeat(E'\\x00', 23),
+    transaction_timestamp()
+);
 
 -- ── Legacy definition for existing development voyages ─────────────────────
 

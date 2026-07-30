@@ -47,7 +47,8 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 		return nil, fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 
-	requestHash := sha256.Sum256(nil)
+	hashInput := sha256.Sum256([]byte(idempotencyScopeCreate))
+	requestHash := hashInput[:]
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -56,7 +57,7 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 	defer tx.Rollback(ctx)
 	q := query.New(tx)
 
-	result, err := s.claimKey(ctx, q, pid, idempotencyScopeCreate, idempotencyKey, requestHash[:])
+	result, err := s.claimKey(ctx, q, pid, idempotencyScopeCreate, idempotencyKey, requestHash)
 	if err != nil {
 		return nil, err
 	}
@@ -64,18 +65,16 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 		return replayVoyageResponse(result.key.ResponseJson, result.key.ResponseStatus)
 	}
 
-	playerRow, err := q.LockPlayerRow(ctx, pid)
+	_, err = q.LockPlayerRow(ctx, pid)
 	if err != nil {
 		return nil, fmt.Errorf("%w: lock player: %w", ErrServiceUnavailable, err)
 	}
-	if playerRow.CurrentVoyageID.Valid {
-		_, checkErr := q.GetCurrentVoyageForPlayer(ctx, pid)
-		if checkErr == nil {
-			return nil, ErrActiveVoyageExists
-		}
-		if !errors.Is(checkErr, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%w: check active voyage: %w", ErrInternal, checkErr)
-		}
+	_, checkErr := q.GetActiveVoyageForPlayer(ctx, pid)
+	if checkErr == nil {
+		return nil, ErrActiveVoyageExists
+	}
+	if !errors.Is(checkErr, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: check active voyage: %w", ErrInternal, checkErr)
 	}
 
 	def, err := q.GetPublishedVoyageDefinition(ctx, defaultDefinitionKey)
@@ -124,11 +123,15 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 		return nil, fmt.Errorf("%w: insert voyage: %w", ErrInternal, err)
 	}
 
-	if err := insertLedgerEntry(ctx, q, voyageID, voyagePublicID, ledgerEntryHull, def.StartingHull); err != nil {
-		return nil, err
+	if def.StartingHull > 0 {
+		if err := insertLedgerEntry(ctx, q, voyageID, voyagePublicID, ledgerEntryHull, def.StartingHull); err != nil {
+			return nil, err
+		}
 	}
-	if err := insertLedgerEntry(ctx, q, voyageID, voyagePublicID, ledgerEntrySupplies, def.StartingSupplies); err != nil {
-		return nil, err
+	if def.StartingSupplies > 0 {
+		if err := insertLedgerEntry(ctx, q, voyageID, voyagePublicID, ledgerEntrySupplies, def.StartingSupplies); err != nil {
+			return nil, err
+		}
 	}
 
 	instances := make([]keeperInstance, len(starterKeepers))
@@ -236,7 +239,7 @@ func (s *Service) GetCurrent(ctx context.Context, playerID string) (*VoyageRespo
 	}
 
 	q := query.New(s.pool)
-	voyageRow, err := q.GetCurrentVoyageForPlayer(ctx, pid)
+	voyageRow, err := q.GetActiveVoyageForPlayer(ctx, pid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoActiveVoyage
@@ -288,7 +291,8 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 		return nil, fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 
-	requestHash := sha256.Sum256(nil)
+	hashInput := sha256.Sum256([]byte(idempotencyScopeAbandon + ":" + voyageID))
+	requestHash := hashInput[:]
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -297,7 +301,7 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 	defer tx.Rollback(ctx)
 	q := query.New(tx)
 
-	result, err := s.claimKey(ctx, q, pid, idempotencyScopeAbandon, idempotencyKey, requestHash[:])
+	result, err := s.claimKey(ctx, q, pid, idempotencyScopeAbandon, idempotencyKey, requestHash)
 	if err != nil {
 		return nil, err
 	}
