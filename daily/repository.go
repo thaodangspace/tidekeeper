@@ -56,15 +56,11 @@ func (r *Repository) GetCurrentDailyContext(ctx context.Context, playerID ID) (D
 	modifier, objective, signals, lineup, inventory, shop, strategies := mapV1ToDaily(proj)
 
 	var selectedStrategyID *string
-	if row.SelectedStrategyID != nil && *row.SelectedStrategyID != "" {
-		id := *row.SelectedStrategyID
+	if proj.SelectedStrategyID != nil && *proj.SelectedStrategyID != "" {
+		id := *proj.SelectedStrategyID
 		selectedStrategyID = &id
 	}
-
-	var pendingRewardCount int32
-	if row.PendingRewardCount != nil {
-		pendingRewardCount = *row.PendingRewardCount
-	}
+	pendingRewardCount := proj.PendingRewardCount
 
 	var dayNumber int32
 	if row.CurrentDayNumber != nil {
@@ -90,7 +86,7 @@ func (r *Repository) GetCurrentDailyContext(ctx context.Context, playerID ID) (D
 	}
 
 	return DailyContext{
-		ServerNow: row.ServerNow.Time,
+		ServerNow: row.ServerNow.Time.UTC(),
 		Voyage: VoyageSummary{
 			PublicID:      *row.VoyagePublicID,
 			Status:        *row.VoyageStatus,
@@ -102,8 +98,8 @@ func (r *Repository) GetCurrentDailyContext(ctx context.Context, playerID ID) (D
 		},
 		Daily: DailyDetail{
 			Phase:              *row.PlayerPhase,
-			LockAt:             row.LockAt.Time,
-			SettleAfter:        row.SettleAfter.Time,
+			LockAt:             row.LockAt.Time.UTC(),
+			SettleAfter:        row.SettleAfter.Time.UTC(),
 			Version:            playerStateVersion,
 			Modifier:           modifier,
 			Objective:          objective,

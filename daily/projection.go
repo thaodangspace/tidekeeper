@@ -177,6 +177,9 @@ func validateV1Projection(p v1Projection) error {
 		if s.ObservedTo.IsZero() {
 			return fmt.Errorf("signals[%d].observedTo is required", i)
 		}
+		if s.ObservedTo.Before(s.ObservedFrom) {
+			return fmt.Errorf("signals[%d].observedTo must not be before observedFrom", i)
+		}
 	}
 
 	if p.Lineup.Slots == nil {
@@ -192,6 +195,11 @@ func validateV1Projection(p v1Projection) error {
 		if slot.Index != int32(i) {
 			return fmt.Errorf("lineup.slots[%d].index is %d, want %d", i, slot.Index, i)
 		}
+		if slot.Keeper != nil {
+			if err := validateV1Keeper(*slot.Keeper, fmt.Sprintf("lineup.slots[%d].keeper", i)); err != nil {
+				return err
+			}
+		}
 	}
 	if p.Lineup.Synergies == nil {
 		return fmt.Errorf("lineup.synergies must not be null")
@@ -203,8 +211,17 @@ func validateV1Projection(p v1Projection) error {
 		if s.Name == "" {
 			return fmt.Errorf("lineup.synergies[%d].name is required", i)
 		}
+		if s.Description == "" {
+			return fmt.Errorf("lineup.synergies[%d].description is required", i)
+		}
 		if s.State == "" {
 			return fmt.Errorf("lineup.synergies[%d].state is required", i)
+		}
+		if s.CurrentCount < 0 {
+			return fmt.Errorf("lineup.synergies[%d].currentCount must be non-negative", i)
+		}
+		if s.RequiredCount <= 0 {
+			return fmt.Errorf("lineup.synergies[%d].requiredCount must be positive", i)
 		}
 	}
 	if p.Lineup.Warnings == nil {
@@ -303,8 +320,8 @@ func validateV1Keeper(k v1Keeper, prefix string) error {
 	if k.Name == "" {
 		return fmt.Errorf("%s.name is required", prefix)
 	}
-	if k.Level < 0 {
-		return fmt.Errorf("%s.level must be non-negative", prefix)
+	if k.Level < 1 {
+		return fmt.Errorf("%s.level must be at least 1", prefix)
 	}
 	if k.Rarity == "" {
 		return fmt.Errorf("%s.rarity is required", prefix)
@@ -338,11 +355,24 @@ func mapV1ToDaily(p v1Projection) (Modifier, Objective, []Signal, Lineup, []Keep
 
 	signals := make([]Signal, len(p.Signals))
 	for i, s := range p.Signals {
-		signals[i] = Signal(s)
+		signals[i] = Signal{
+			ID:           s.ID,
+			Name:         s.Name,
+			Description:  s.Description,
+			Direction:    s.Direction,
+			Strength:     s.Strength,
+			ObservedFrom: s.ObservedFrom.UTC(),
+			ObservedTo:   s.ObservedTo.UTC(),
+		}
 	}
 
+	var lockedAt *time.Time
+	if p.Lineup.LockedAt != nil {
+		t := p.Lineup.LockedAt.UTC()
+		lockedAt = &t
+	}
 	lineup := Lineup{
-		LockedAt:  p.Lineup.LockedAt,
+		LockedAt:  lockedAt,
 		MaxSlots:  p.Lineup.MaxSlots,
 		Slots:     mapV1FleetSlots(p.Lineup.Slots),
 		Synergies: mapV1Synergies(p.Lineup.Synergies),
@@ -354,9 +384,14 @@ func mapV1ToDaily(p v1Projection) (Modifier, Objective, []Signal, Lineup, []Keep
 		inventory[i] = mapV1Keeper(k)
 	}
 
+	var refreshAt *time.Time
+	if p.Shop.RefreshAt != nil {
+		t := p.Shop.RefreshAt.UTC()
+		refreshAt = &t
+	}
 	shop := Shop{
 		Offers:      mapV1ShopOffers(p.Shop.Offers),
-		RefreshAt:   p.Shop.RefreshAt,
+		RefreshAt:   refreshAt,
 		RerollCost:  p.Shop.RerollCost,
 		RerollIndex: p.Shop.RerollIndex,
 	}
