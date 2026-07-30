@@ -1,0 +1,1187 @@
+openapi: 3.0.3
+info:
+  title: Tidekeepers API
+  version: 1.0.0
+  description: |
+    Contract for first-party account authentication, authenticated player identity,
+    and canonical daily Voyage context. Public timestamps are RFC 3339 values
+    normalized to UTC and ending in `Z`. Read operations never infer or advance
+    a player's materialized daily phase.
+servers:
+  - url: /
+    description: Same origin as the deployed API service.
+tags:
+  - name: Auth
+    description: Public account registration and sign-in.
+  - name: Player
+    description: Authenticated player identity reads.
+  - name: Voyage
+    description: Authenticated current Voyage reads.
+  - name: Health
+    description: Unauthenticated process and dependency health checks.
+paths:
+  /auth/register:
+    post:
+      operationId: register
+      tags: [Auth]
+      summary: Register an account
+      description: Creates an email/password account, its player profile, and an authenticated session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '201':
+          description: Account created and session cookie issued.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/AuthNoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+        '400':
+          $ref: '#/components/responses/InvalidAuthInput'
+        '409':
+          $ref: '#/components/responses/EmailAlreadyRegistered'
+        '500':
+          $ref: '#/components/responses/InternalErrorAuth'
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Sign in to an existing account
+      description: Verifies an email/password credential pair and issues a new authenticated session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '204':
+          description: Credentials accepted and session cookie issued.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/AuthNoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+        '400':
+          $ref: '#/components/responses/InvalidAuthInput'
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '500':
+          $ref: '#/components/responses/InternalErrorAuth'
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [Player]
+      summary: Get the authenticated player
+      description: |
+        Returns the player profile associated with the opaque session cookie.
+        The response is private player state and must not be stored by browsers,
+        intermediaries, or shared caches.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Authenticated player profile.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+              example:
+                playerId: plr_123
+                onboardingCompleted: true
+                locale: en
+                timezone: UTC
+                activeVoyageId: voy_123
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '429':
+          $ref: '#/components/responses/RateLimitedRead'
+        '500':
+          $ref: '#/components/responses/InternalErrorRead'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableRead'
+  /api/v1/me/keepers:
+    get:
+      operationId: listMyKeepers
+      tags: [Player]
+      summary: List the authenticated player's Keepers
+      description: |
+        Returns Keeper instances permanently owned by the player associated with
+        the opaque session cookie. The collection is empty when the player has
+        not acquired any Keepers.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Player-owned Keeper inventory.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerKeepersResponse'
+              example:
+                keepers:
+                  - id: kpr_123
+                    definitionKey: harbor_warden
+                    name: Harbor Warden
+                    currentName: Harbor Current
+                    sector: HARBOR
+                    role: WARDEN
+                    rarity: COMMON
+                    level: 1
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '429':
+          $ref: '#/components/responses/RateLimitedRead'
+        '500':
+          $ref: '#/components/responses/InternalErrorRead'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableRead'
+  /api/v1/voyages/current/daily-context:
+    get:
+      operationId: getCurrentDailyContext
+      tags: [Voyage]
+      summary: Get the current Voyage daily context
+      description: |
+        Returns one consistent, materialized read model for the authenticated
+        player's current Voyage. A current Voyage may have a terminal status;
+        `COMPLETED`, `FAILED`, or `ABANDONED` takes presentation precedence over
+        `daily.phase`, while any materialized daily data remains available.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current Voyage and daily context.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyContextResponse'
+              example:
+                serverNow: '2026-07-30T04:00:00Z'
+                voyage:
+                  id: voy_123
+                  status: ACTIVE
+                  dayNumber: 3
+                  fundHealth: 82
+                  maxFundHealth: 100
+                  capital: 11
+                  score: '245.0000'
+                daily:
+                  phase: PREPARATION
+                  lockAt: '2026-07-30T23:55:00Z'
+                  settleAfter: '2026-07-31T00:05:00Z'
+                  version: 9
+                  modifier:
+                    id: mod_calm_seas
+                    name: Calm Seas
+                    description: Fleet stability is favored today.
+                  objective:
+                    id: obj_balanced_fleet
+                    name: Balanced Fleet
+                    description: Prepare a varied Fleet before lock.
+                    progressLabel: 2 of 3 sectors represented
+                    rewardLabel: Bonus Supplies
+                  signals:
+                    - id: sig_market_breadth
+                      name: Market Breadth
+                      direction: UP
+                      strength: MODERATE
+                      description: Broad participation improved during the observation window.
+                      observedFrom: '2026-07-29T14:00:00Z'
+                      observedTo: '2026-07-30T03:55:00Z'
+                  lineup:
+                    maxSlots: 3
+                    slots:
+                      - index: 0
+                        keeper:
+                          id: kpr_101
+                          definitionId: kdef_navigator
+                          name: The Navigator
+                          sector: NAVIGATION
+                          role: GUIDE
+                          rarity: COMMON
+                          level: 2
+                          passiveSummary: Improves Fleet stability.
+                          artworkUrl: /assets/keepers/navigator.webp
+                      - index: 1
+                        keeper:
+                          id: kpr_102
+                          definitionId: kdef_lookout
+                          name: The Lookout
+                          sector: SIGNALS
+                          role: SCOUT
+                          rarity: UNCOMMON
+                          level: 1
+                          passiveSummary: Highlights changing conditions.
+                          artworkUrl: null
+                      - index: 2
+                        keeper: null
+                    synergies:
+                      - id: syn_watch
+                        name: Watch Crew
+                        state: PARTIAL
+                        currentCount: 2
+                        requiredCount: 3
+                        description: Add one more compatible Keeper to activate.
+                    warnings:
+                      - code: EMPTY_SLOT
+                        severity: WARNING
+                        message: One Fleet slot is empty.
+                    lockedAt: null
+                  inventory:
+                    - id: kpr_103
+                      definitionId: kdef_quartermaster
+                      name: The Quartermaster
+                      sector: LOGISTICS
+                      role: SUPPORT
+                      rarity: RARE
+                      level: 1
+                      passiveSummary: Preserves resources in difficult conditions.
+                      artworkUrl: 'https://cdn.example.test/keepers/quartermaster.webp'
+                  shop:
+                    rerollIndex: 0
+                    rerollCost: 2
+                    refreshAt: '2026-07-30T23:55:00Z'
+                    offers:
+                      - id: off_201
+                        keeper:
+                          id: kpr_preview_201
+                          definitionId: kdef_sounder
+                          name: The Sounder
+                          sector: DEPTH
+                          role: SPECIALIST
+                          rarity: COMMON
+                          level: 1
+                          passiveSummary: Reads depth changes.
+                          artworkUrl: null
+                        cost: 4
+                        available: true
+                        synergyHint: Complements Watch Crew.
+                  strategies:
+                    - id: strat_steady
+                      name: Steady Course
+                      description: Favor consistency over extremes.
+                      upside: Reduces exposure to adverse conditions.
+                      downside: Limits gains from strong conditions.
+                      available: true
+                  selectedStrategyId: strat_steady
+                  pendingRewardCount: 0
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '404':
+          description: |
+            No current Voyage exists (`NO_ACTIVE_VOYAGE`), or a player-visible
+            Voyage resource is absent or inaccessible (`VOYAGE_NOT_FOUND`).
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                noActiveVoyage:
+                  summary: Player has no current Voyage
+                  value:
+                    code: NO_ACTIVE_VOYAGE
+                    message: No active Voyage is available.
+                    requestId: req_123
+                voyageNotFound:
+                  summary: Player-visible resource is absent or inaccessible
+                  value:
+                    code: VOYAGE_NOT_FOUND
+                    message: The Voyage was not found.
+                    requestId: req_123
+        '429':
+          $ref: '#/components/responses/RateLimitedRead'
+        '500':
+          $ref: '#/components/responses/InternalErrorRead'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableRead'
+  /health/live:
+    get:
+      operationId: getLiveness
+      tags: [Health]
+      summary: Check process liveness
+      description: Reports only whether the process can serve requests.
+      security: []
+      responses:
+        '200':
+          description: Process is live.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/HealthNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivenessResponse'
+              example:
+                status: live
+  /health/ready:
+    get:
+      operationId: getReadiness
+      tags: [Health]
+      summary: Check service readiness
+      description: |
+        Verifies required configuration and a bounded PostgreSQL ping. It never
+        exposes DSNs, credentials, schema details, or stack traces.
+      security: []
+      responses:
+        '200':
+          description: Required dependencies are ready.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/HealthNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: ready
+        '503':
+          description: A required dependency is unavailable.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/HealthNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: unavailable
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: tidekeepers_session
+      description: |
+        Opaque session token containing at least 256 bits of cryptographically
+        secure randomness. Production deployments issue the configured cookie
+        with `Secure`, `HttpOnly`, `SameSite=Lax`, and `Path=/`; an optional
+        `Domain` is deployment-specific. The server persists only a SHA-256 or
+        stronger one-way digest and never logs the raw cookie or digest.
+  headers:
+    XRequestID:
+      description: |
+        Required correlation ID for this response. It is either a validated
+        incoming value or a server-generated value and matches `requestId` in
+        an API error body.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+      example: req_123
+    PrivateNoStore:
+      description: Required cache policy for player-specific API reads.
+      required: true
+      schema:
+        type: string
+        enum:
+          - private, no-store
+      example: private, no-store
+    HealthNoStore:
+      description: Required explicit cache prevention for health responses.
+      required: true
+      schema:
+        type: string
+        enum:
+          - no-store
+      example: no-store
+    AuthNoStore:
+      description: Required cache prevention for authentication responses.
+      required: true
+      schema:
+        type: string
+        enum:
+          - no-store
+      example: no-store
+    SessionCookie:
+      description: |
+        Newly issued opaque session cookie. It uses the configured cookie name
+        and domain with `Secure`, `HttpOnly`, `SameSite=Lax`, and `Path=/`.
+      required: true
+      schema:
+        type: string
+      example: tidekeepers_session=opaque-token; Path=/; Max-Age=2592000; Secure; HttpOnly; SameSite=Lax
+    RetryAfter:
+      description: Required positive whole number of seconds before retrying.
+      required: true
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 2147483647
+      example: 30
+    ClearSessionCookie:
+      description: |
+        Clearing cookie returned when a presented session is expired, revoked,
+        malformed, or unknown. When present it uses the configured cookie name
+        and domain with `Max-Age=0`, an expired `Expires`, `Secure`, `HttpOnly`,
+        `SameSite=Lax`, and `Path=/`. It is omitted when no cookie was presented.
+      schema:
+        type: string
+      example: tidekeepers_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
+  responses:
+    InvalidAuthInput:
+      description: The JSON body, email address, or password did not meet the public input policy.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/AuthNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INVALID_AUTH_INPUT
+            message: Enter a valid email and password.
+            requestId: req_123
+    EmailAlreadyRegistered:
+      description: An account has already registered the supplied normalized email address.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/AuthNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: EMAIL_ALREADY_REGISTERED
+            message: An account already exists for this email address.
+            requestId: req_123
+    InvalidCredentials:
+      description: Credentials were not accepted. This deliberately does not reveal whether the email exists.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/AuthNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INVALID_CREDENTIALS
+            message: Invalid email or password.
+            requestId: req_123
+    InternalErrorAuth:
+      description: An unexpected authentication failure occurred.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/AuthNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INTERNAL_ERROR
+            message: An unexpected error occurred.
+            requestId: req_123
+    UnauthorizedRead:
+      description: |
+        Authentication is required. `AUTH_REQUIRED` means no session cookie was
+        presented. `SESSION_EXPIRED` deliberately covers every presented but
+        malformed, unknown, expired, or revoked session without distinguishing
+        the reason. A clearing `Set-Cookie` is included for `SESSION_EXPIRED`.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+        Set-Cookie:
+          $ref: '#/components/headers/ClearSessionCookie'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            authRequired:
+              value:
+                code: AUTH_REQUIRED
+                message: Authentication is required.
+                requestId: req_123
+            sessionExpired:
+              value:
+                code: SESSION_EXPIRED
+                message: The session has expired.
+                requestId: req_123
+    RateLimitedRead:
+      description: The configured request limit was exceeded.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: RATE_LIMITED
+            message: Too many requests. Try again later.
+            requestId: req_123
+    InternalErrorRead:
+      description: An unexpected internal failure occurred.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INTERNAL_ERROR
+            message: An unexpected error occurred.
+            requestId: req_123
+    ServiceUnavailableRead:
+      description: The database or another required dependency is unavailable.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: SERVICE_UNAVAILABLE
+            message: The service is temporarily unavailable.
+            requestId: req_123
+  schemas:
+    CredentialsRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Email address, normalized by the server before persistence.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: First-party account password. It is never returned or logged.
+    PublicID:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '^[A-Za-z][A-Za-z0-9_-]*$'
+      description: Stable non-sequential public identifier.
+      example: voy_123
+    UtcTimestamp:
+      type: string
+      format: date-time
+      pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+      description: RFC 3339 timestamp normalized to UTC and ending in `Z`.
+      example: '2026-07-30T04:00:00Z'
+    CanonicalScore:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]*)\.[0-9]{4}$'
+      description: Signed decimal score in canonical fixed four-decimal form; never a JSON floating-point number.
+      example: '245.0000'
+    ExtensibleToken:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Z][A-Z0-9_]*$'
+      description: Forward-compatible uppercase token. Clients must safely handle values added later.
+    MeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - playerId
+        - onboardingCompleted
+        - locale
+        - timezone
+        - activeVoyageId
+      properties:
+        playerId:
+          $ref: '#/components/schemas/PublicID'
+        onboardingCompleted:
+          type: boolean
+        locale:
+          type: string
+          minLength: 2
+          maxLength: 35
+          description: Player locale as a BCP 47 language tag.
+          example: en
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Player timezone as an IANA time-zone name.
+          example: UTC
+        activeVoyageId:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z][A-Za-z0-9_-]*$'
+          description: |
+            Current Voyage identifier, or `null` when none exists. Despite the
+            compatibility field name, it may temporarily identify a completed,
+            failed, or abandoned Voyage until later progression clears it.
+          example: voy_123
+    PlayerKeepersResponse:
+      type: object
+      additionalProperties: false
+      required: [keepers]
+      properties:
+        keepers:
+          type: array
+          description: Player-owned Keeper instances, ordered by acquisition time.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/PlayerKeeperSummary'
+    PlayerKeeperSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - definitionKey
+        - name
+        - currentName
+        - sector
+        - role
+        - rarity
+        - level
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        definitionKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Stable key of the Keeper definition backing this instance.
+        name:
+          $ref: '#/components/schemas/PublicName'
+        currentName:
+          $ref: '#/components/schemas/PublicName'
+        sector:
+          $ref: '#/components/schemas/ExtensibleToken'
+        role:
+          $ref: '#/components/schemas/ExtensibleToken'
+        rarity:
+          $ref: '#/components/schemas/ExtensibleToken'
+        level:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+    DailyContextResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - serverNow
+        - voyage
+        - daily
+      properties:
+        serverNow:
+          allOf:
+            - $ref: '#/components/schemas/UtcTimestamp'
+          description: Authoritative PostgreSQL transaction time, or the equivalent test-injected clock value, in UTC.
+        voyage:
+          $ref: '#/components/schemas/VoyageSummary'
+        daily:
+          $ref: '#/components/schemas/DailySummary'
+    VoyageSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - dayNumber
+        - fundHealth
+        - maxFundHealth
+        - capital
+        - score
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - COMPLETED
+            - FAILED
+            - ABANDONED
+          description: |
+            Closed set of Voyage lifecycle statuses. `COMPLETED`, `FAILED`, and
+            `ABANDONED` are terminal and take presentation precedence over the
+            daily phase.
+        dayNumber:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 7
+        fundHealth:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: Current whole-number Hull/fund health.
+        maxFundHealth:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: Maximum whole-number Hull/fund health.
+        capital:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Current whole-number Supplies/capital resource.
+        score:
+          $ref: '#/components/schemas/CanonicalScore'
+    DailySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - phase
+        - lockAt
+        - settleAfter
+        - version
+        - modifier
+        - objective
+        - signals
+        - lineup
+        - inventory
+        - shop
+        - strategies
+        - selectedStrategyId
+        - pendingRewardCount
+      properties:
+        phase:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          x-known-values:
+            - SCHEDULED
+            - PREPARATION
+            - LOCKED
+            - DATA_PENDING
+            - SETTLING
+            - RESULT_READY
+            - REWARD_PENDING
+            - CLOSED
+          description: |
+            Canonical materialized player-visible phase. This is intentionally
+            not an enum: clients must safely handle future values. Known values
+            are `SCHEDULED`, `PREPARATION`, `LOCKED`, `DATA_PENDING`, `SETTLING`,
+            `RESULT_READY`, `REWARD_PENDING`, and `CLOSED`. `DATA_PENDING`
+            represents delayed required source data without exposing provider
+            identities or payloads.
+          example: PREPARATION
+        lockAt:
+          $ref: '#/components/schemas/UtcTimestamp'
+        settleAfter:
+          allOf:
+            - $ref: '#/components/schemas/UtcTimestamp'
+          description: UTC time after `lockAt` when settlement may begin; reads do not infer phase from this value.
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        modifier:
+          $ref: '#/components/schemas/ModifierSummary'
+        objective:
+          $ref: '#/components/schemas/ObjectiveSummary'
+        signals:
+          type: array
+          description: Required collection; encoded as `[]` when there are no Signals, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/SignalSummary'
+        lineup:
+          $ref: '#/components/schemas/LineupSummary'
+        inventory:
+          type: array
+          description: Required collection; encoded as `[]` when inventory is empty, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/KeeperSummary'
+        shop:
+          $ref: '#/components/schemas/ShopSummary'
+        strategies:
+          type: array
+          description: Required collection; encoded as `[]` when there are no Strategies, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/StrategySummary'
+        selectedStrategyId:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z][A-Za-z0-9_-]*$'
+          description: When non-null, references exactly one available entry in `strategies`; otherwise explicitly `null`.
+          example: strat_steady
+        pendingRewardCount:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+    ModifierSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, description]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        description:
+          $ref: '#/components/schemas/PublicText'
+    ObjectiveSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, progressLabel, rewardLabel]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        description:
+          $ref: '#/components/schemas/PublicText'
+        progressLabel:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 256
+          description: Public-safe progress text, or explicitly `null` when no progress label applies.
+        rewardLabel:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 256
+          description: Public-safe reward text, or explicitly `null` when no reward label applies.
+    SignalSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, direction, strength, description, observedFrom, observedTo]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        direction:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible presentation direction; currently published content may use `UP`, `DOWN`, `FLAT`, or `MIXED`.
+        strength:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible presentation strength; currently published content may use `WEAK`, `MODERATE`, or `STRONG`.
+        description:
+          $ref: '#/components/schemas/PublicText'
+        observedFrom:
+          $ref: '#/components/schemas/UtcTimestamp'
+        observedTo:
+          allOf:
+            - $ref: '#/components/schemas/UtcTimestamp'
+          description: End of the UTC observation window; equal to or later than `observedFrom`.
+    KeeperSummary:
+      type: object
+      additionalProperties: false
+      required: [id, definitionId, name, sector, role, rarity, level, passiveSummary, artworkUrl]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        definitionId:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        sector:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible content-defined Keeper sector.
+        role:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible content-defined Keeper role.
+        rarity:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible content-defined Keeper rarity.
+        level:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        passiveSummary:
+          $ref: '#/components/schemas/PublicText'
+        artworkUrl:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 2048
+          pattern: '^(\/[^\r\n]*|https:\/\/[^\r\n]+)$'
+          description: Relative application path or HTTPS URL, or explicitly `null` when artwork is unavailable.
+    FleetSlotSummary:
+      type: object
+      additionalProperties: false
+      required: [index, keeper]
+      properties:
+        index:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 19
+          description: Zero-based position in the complete ordered Fleet slot collection.
+        keeper:
+          type: object
+          nullable: true
+          description: Assigned Keeper, or explicitly `null` when this slot is empty.
+          allOf:
+            - $ref: '#/components/schemas/KeeperSummary'
+    SynergySummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, state, currentCount, requiredCount, description]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        state:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible preview state; currently published content may use `INACTIVE`, `PARTIAL`, or `ACTIVE`.
+        currentCount:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+        requiredCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2147483647
+        description:
+          $ref: '#/components/schemas/PublicText'
+    FleetWarningSummary:
+      type: object
+      additionalProperties: false
+      required: [code, severity, message]
+      properties:
+        code:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Stable machine-readable Fleet warning code.
+        severity:
+          allOf:
+            - $ref: '#/components/schemas/ExtensibleToken'
+          description: Extensible presentation severity; currently published content may use `INFO`, `WARNING`, or `ERROR`.
+        message:
+          $ref: '#/components/schemas/PublicText'
+    LineupSummary:
+      type: object
+      additionalProperties: false
+      required: [maxSlots, slots, synergies, warnings, lockedAt]
+      properties:
+        maxSlots:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 20
+        slots:
+          type: array
+          description: |
+            Required complete ordered collection containing every zero-based
+            index from `0` through `maxSlots - 1` exactly once; never `null`.
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/FleetSlotSummary'
+        synergies:
+          type: array
+          description: Required collection; encoded as `[]` when empty, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/SynergySummary'
+        warnings:
+          type: array
+          description: Required collection; encoded as `[]` when empty, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/FleetWarningSummary'
+        lockedAt:
+          type: string
+          format: date-time
+          nullable: true
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+          description: RFC 3339 UTC `Z` lock timestamp, or explicitly `null` while the lineup is unlocked.
+    ShopOfferSummary:
+      type: object
+      additionalProperties: false
+      required: [id, keeper, cost, available, synergyHint]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        keeper:
+          $ref: '#/components/schemas/KeeperSummary'
+        cost:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+        available:
+          type: boolean
+        synergyHint:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 512
+          description: Public-safe hint, or explicitly `null` when no hint applies.
+    ShopSummary:
+      type: object
+      additionalProperties: false
+      required: [rerollIndex, rerollCost, refreshAt, offers]
+      properties:
+        rerollIndex:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+        rerollCost:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+        refreshAt:
+          type: string
+          format: date-time
+          nullable: true
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+          description: RFC 3339 UTC `Z` refresh timestamp, or explicitly `null` when no refresh is scheduled.
+        offers:
+          type: array
+          description: Required collection; encoded as `[]` when there are no offers, never `null` or omitted.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/ShopOfferSummary'
+    StrategySummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, upside, downside, available]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        name:
+          $ref: '#/components/schemas/PublicName'
+        description:
+          $ref: '#/components/schemas/PublicText'
+        upside:
+          $ref: '#/components/schemas/PublicText'
+        downside:
+          $ref: '#/components/schemas/PublicText'
+        available:
+          type: boolean
+    PublicName:
+      type: string
+      minLength: 1
+      maxLength: 160
+      description: Trusted public plain text; raw HTML and provider text are prohibited.
+    PublicText:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      description: Trusted public plain text; raw HTML and raw provider text are prohibited.
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          enum:
+            - INVALID_AUTH_INPUT
+            - EMAIL_ALREADY_REGISTERED
+            - INVALID_CREDENTIALS
+            - AUTH_REQUIRED
+            - SESSION_EXPIRED
+            - NO_ACTIVE_VOYAGE
+            - VOYAGE_NOT_FOUND
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+            - SERVICE_UNAVAILABLE
+          description: Stable machine-readable code; clients must not branch on `message`.
+        message:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: Public-safe message containing no SQL, stack, provider, or credential details.
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+          description: Correlation ID identical to the `X-Request-ID` response header.
+    LivenessResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [live]
+    ReadinessResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, unavailable]
