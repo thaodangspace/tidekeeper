@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thaodangspace/tidekeepers-server/auth"
 	"github.com/thaodangspace/tidekeepers-server/config"
+	"github.com/thaodangspace/tidekeepers-server/daily"
 	"github.com/thaodangspace/tidekeepers-server/database"
 	"github.com/thaodangspace/tidekeepers-server/httpapi"
 	"github.com/thaodangspace/tidekeepers-server/httpapi/handlers"
@@ -45,10 +46,12 @@ func NewAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) (*API, 
 	players := player.NewService(player.NewRepository(pool))
 	playerMe := handlers.NewMe(players)
 	playerKeepers := handlers.NewPlayerKeepers(players)
+	dailyService := daily.NewService(daily.NewRepository(pool))
+	dailyContext := handlers.NewDailyContextHandler(dailyService)
 	api.server = &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: httpapi.NewFoundationRouter(
-			health, accounts, sessions, playerMe, playerKeepers,
+			health, accounts, sessions, playerMe, playerKeepers, dailyContext,
 			cfg.Session.CookieName, cfg.Session.CookieSecure, cfg.Session.CookieDomain, logger,
 		),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
