@@ -16,6 +16,7 @@ import (
 	"github.com/thaodangspace/tidekeepers-server/httpapi"
 	"github.com/thaodangspace/tidekeepers-server/httpapi/handlers"
 	"github.com/thaodangspace/tidekeepers-server/player"
+	"github.com/thaodangspace/tidekeepers-server/voyage"
 )
 
 // API is the runnable HTTP API and its owned resources.
@@ -48,10 +49,12 @@ func NewAPI(ctx context.Context, cfg config.Config, logger *slog.Logger) (*API, 
 	playerKeepers := handlers.NewPlayerKeepers(players)
 	dailyService := daily.NewService(daily.NewRepository(pool))
 	dailyContext := handlers.NewDailyContextHandler(dailyService)
+	voyageService := voyage.NewService(pool)
+	voyageHandler := handlers.NewVoyageHandler(voyageService)
 	api.server = &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: httpapi.NewFoundationRouter(
-			health, accounts, sessions, playerMe, playerKeepers, dailyContext,
+			health, accounts, sessions, playerMe, playerKeepers, dailyContext, voyageHandler,
 			cfg.Session.CookieName, cfg.Session.CookieSecure, cfg.Session.CookieDomain, logger,
 		),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,

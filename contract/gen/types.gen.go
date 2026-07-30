@@ -13,16 +13,29 @@ const (
 
 // Defines values for ApiErrorCode.
 const (
-	AUTHREQUIRED           ApiErrorCode = "AUTH_REQUIRED"
-	EMAILALREADYREGISTERED ApiErrorCode = "EMAIL_ALREADY_REGISTERED"
-	INTERNALERROR          ApiErrorCode = "INTERNAL_ERROR"
-	INVALIDAUTHINPUT       ApiErrorCode = "INVALID_AUTH_INPUT"
-	INVALIDCREDENTIALS     ApiErrorCode = "INVALID_CREDENTIALS"
-	NOACTIVEVOYAGE         ApiErrorCode = "NO_ACTIVE_VOYAGE"
-	RATELIMITED            ApiErrorCode = "RATE_LIMITED"
-	SERVICEUNAVAILABLE     ApiErrorCode = "SERVICE_UNAVAILABLE"
-	SESSIONEXPIRED         ApiErrorCode = "SESSION_EXPIRED"
-	VOYAGENOTFOUND         ApiErrorCode = "VOYAGE_NOT_FOUND"
+	ACTIVEVOYAGEEXISTS              ApiErrorCode = "ACTIVE_VOYAGE_EXISTS"
+	AUTHREQUIRED                    ApiErrorCode = "AUTH_REQUIRED"
+	EMAILALREADYREGISTERED          ApiErrorCode = "EMAIL_ALREADY_REGISTERED"
+	IDEMPOTENCYKEYREUSED            ApiErrorCode = "IDEMPOTENCY_KEY_REUSED"
+	INTERNALERROR                   ApiErrorCode = "INTERNAL_ERROR"
+	INVALIDAUTHINPUT                ApiErrorCode = "INVALID_AUTH_INPUT"
+	INVALIDCREDENTIALS              ApiErrorCode = "INVALID_CREDENTIALS"
+	INVALIDIDEMPOTENCYKEY           ApiErrorCode = "INVALID_IDEMPOTENCY_KEY"
+	NOACTIVEVOYAGE                  ApiErrorCode = "NO_ACTIVE_VOYAGE"
+	RATELIMITED                     ApiErrorCode = "RATE_LIMITED"
+	SERVICEUNAVAILABLE              ApiErrorCode = "SERVICE_UNAVAILABLE"
+	SESSIONEXPIRED                  ApiErrorCode = "SESSION_EXPIRED"
+	VOYAGEINITIALIZATIONUNAVAILABLE ApiErrorCode = "VOYAGE_INITIALIZATION_UNAVAILABLE"
+	VOYAGENOTACTIVE                 ApiErrorCode = "VOYAGE_NOT_ACTIVE"
+	VOYAGENOTFOUND                  ApiErrorCode = "VOYAGE_NOT_FOUND"
+)
+
+// Defines values for LifecycleEventResultingStatus.
+const (
+	LifecycleEventResultingStatusABANDONED LifecycleEventResultingStatus = "ABANDONED"
+	LifecycleEventResultingStatusACTIVE    LifecycleEventResultingStatus = "ACTIVE"
+	LifecycleEventResultingStatusCOMPLETED LifecycleEventResultingStatus = "COMPLETED"
+	LifecycleEventResultingStatusFAILED    LifecycleEventResultingStatus = "FAILED"
 )
 
 // Defines values for LivenessResponseStatus.
@@ -34,6 +47,14 @@ const (
 const (
 	Ready       ReadinessResponseStatus = "ready"
 	Unavailable ReadinessResponseStatus = "unavailable"
+)
+
+// Defines values for VoyageResponseStatus.
+const (
+	VoyageResponseStatusABANDONED VoyageResponseStatus = "ABANDONED"
+	VoyageResponseStatusACTIVE    VoyageResponseStatus = "ACTIVE"
+	VoyageResponseStatusCOMPLETED VoyageResponseStatus = "COMPLETED"
+	VoyageResponseStatusFAILED    VoyageResponseStatus = "FAILED"
 )
 
 // Defines values for VoyageSummaryStatus.
@@ -166,6 +187,24 @@ type KeeperSummary struct {
 	// Sector Extensible content-defined Keeper sector.
 	Sector ExtensibleToken `json:"sector"`
 }
+
+// LifecycleEvent defines model for LifecycleEvent.
+type LifecycleEvent struct {
+	// EventType Stable lifecycle event type (e.g. `CREATED`, `ABANDONED`).
+	EventType string `json:"eventType"`
+
+	// Id Stable non-sequential public identifier.
+	Id PublicID `json:"id"`
+
+	// OccurredAt RFC 3339 timestamp normalized to UTC and ending in `Z`.
+	OccurredAt UtcTimestamp `json:"occurredAt"`
+
+	// ResultingStatus The Voyage status after this event.
+	ResultingStatus LifecycleEventResultingStatus `json:"resultingStatus"`
+}
+
+// LifecycleEventResultingStatus The Voyage status after this event.
+type LifecycleEventResultingStatus string
 
 // LineupSummary defines model for LineupSummary.
 type LineupSummary struct {
@@ -377,6 +416,56 @@ type SynergySummary struct {
 // UtcTimestamp RFC 3339 timestamp normalized to UTC and ending in `Z`.
 type UtcTimestamp = time.Time
 
+// VoyageHistoryResponse defines model for VoyageHistoryResponse.
+type VoyageHistoryResponse struct {
+	// Events Ordered append-only lifecycle events, never null.
+	Events []LifecycleEvent `json:"events"`
+	Voyage VoyageResponse   `json:"voyage"`
+}
+
+// VoyageResponse defines model for VoyageResponse.
+type VoyageResponse struct {
+	// Capital Current whole-number Supplies/capital resource.
+	Capital int32 `json:"capital"`
+
+	// CompletedAt RFC 3339 UTC terminal timestamp, or explicitly `null` while the
+	// Voyage is active.
+	CompletedAt *time.Time `json:"completedAt"`
+	DayNumber   int32      `json:"dayNumber"`
+
+	// DefinitionKey Stable key of the Voyage definition backing this run.
+	DefinitionKey string `json:"definitionKey"`
+
+	// DefinitionVersion Version number of the Voyage definition.
+	DefinitionVersion int64 `json:"definitionVersion"`
+
+	// FundHealth Current whole-number Hull/fund health.
+	FundHealth int32 `json:"fundHealth"`
+
+	// Id Stable non-sequential public identifier.
+	Id PublicID `json:"id"`
+
+	// MaxFundHealth Maximum whole-number Hull/fund health.
+	MaxFundHealth int32 `json:"maxFundHealth"`
+
+	// RowVersion Optimistic concurrency version.
+	RowVersion int64 `json:"rowVersion"`
+
+	// Score Signed decimal score in canonical fixed four-decimal form; never a JSON floating-point number.
+	Score CanonicalScore `json:"score"`
+
+	// StartedAt RFC 3339 timestamp normalized to UTC and ending in `Z`.
+	StartedAt UtcTimestamp `json:"startedAt"`
+
+	// Status Closed set of Voyage lifecycle statuses. `COMPLETED`, `FAILED`, and
+	// `ABANDONED` are terminal.
+	Status VoyageResponseStatus `json:"status"`
+}
+
+// VoyageResponseStatus Closed set of Voyage lifecycle statuses. `COMPLETED`, `FAILED`, and
+// `ABANDONED` are terminal.
+type VoyageResponseStatus string
+
 // VoyageSummary defines model for VoyageSummary.
 type VoyageSummary struct {
 	// Capital Current whole-number Supplies/capital resource.
@@ -421,14 +510,35 @@ type InvalidAuthInput = ApiError
 // InvalidCredentials defines model for InvalidCredentials.
 type InvalidCredentials = ApiError
 
+// InvalidIdempotencyKey defines model for InvalidIdempotencyKey.
+type InvalidIdempotencyKey = ApiError
+
 // RateLimitedRead defines model for RateLimitedRead.
 type RateLimitedRead = ApiError
 
 // ServiceUnavailableRead defines model for ServiceUnavailableRead.
 type ServiceUnavailableRead = ApiError
 
+// UnauthorizedCreate defines model for UnauthorizedCreate.
+type UnauthorizedCreate = ApiError
+
 // UnauthorizedRead defines model for UnauthorizedRead.
 type UnauthorizedRead = ApiError
+
+// VoyageNotFound defines model for VoyageNotFound.
+type VoyageNotFound = ApiError
+
+// CreateVoyageParams defines parameters for CreateVoyage.
+type CreateVoyageParams struct {
+	// IdempotencyKey Client-supplied idempotency key for safe retry.
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// AbandonVoyageParams defines parameters for AbandonVoyage.
+type AbandonVoyageParams struct {
+	// IdempotencyKey Client-supplied idempotency key for safe retry.
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = CredentialsRequest

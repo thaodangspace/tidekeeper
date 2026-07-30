@@ -156,6 +156,253 @@ paths:
           $ref: '#/components/responses/InternalErrorRead'
         '503':
           $ref: '#/components/responses/ServiceUnavailableRead'
+  /api/v1/voyages:
+    post:
+      operationId: createVoyage
+      tags: [Voyage]
+      summary: Create a new Voyage
+      description: |
+        Atomically initializes a complete Voyage with starter Keepers, initial
+        Shop offers, day-one daily state, and the first lifecycle event. Requires
+        an `Idempotency-Key` header for safe retry.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+          description: Client-supplied idempotency key for safe retry.
+      responses:
+        '201':
+          description: Voyage created successfully.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidIdempotencyKey'
+        '401':
+          $ref: '#/components/responses/UnauthorizedCreate'
+        '409':
+          description: An idempotency conflict or active voyage exists.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                activeVoyageExists:
+                  summary: Player already has an active Voyage
+                  value:
+                    code: ACTIVE_VOYAGE_EXISTS
+                    message: An active voyage already exists.
+                    requestId: req_123
+                idempotencyKeyReused:
+                  summary: Idempotency key reused with a different request
+                  value:
+                    code: IDEMPOTENCY_KEY_REUSED
+                    message: Idempotency key was reused with a different request.
+                    requestId: req_123
+        '503':
+          description: Initialization data or service is unavailable.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                code: VOYAGE_INITIALIZATION_UNAVAILABLE
+                message: Voyage initialization is currently unavailable.
+                requestId: req_123
+  /api/v1/voyages/current:
+    get:
+      operationId: getCurrentVoyage
+      tags: [Voyage]
+      summary: Get the current Voyage
+      description: |
+        Returns the Voyage referenced by the authenticated player's current
+        pointer, including terminal state when applicable.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current Voyage resource.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '404':
+          description: No current Voyage exists.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                code: NO_ACTIVE_VOYAGE
+                message: No current voyage.
+                requestId: req_123
+  /api/v1/voyages/{voyageId}:
+    get:
+      operationId: getVoyageByID
+      tags: [Voyage]
+      summary: Get a Voyage by ID
+      description: |
+        Returns a Voyage resource when both public Voyage ID and authenticated
+        player ID match. Foreign and absent IDs both return 404.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: voyageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PublicID'
+      responses:
+        '200':
+          description: Voyage resource.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '404':
+          $ref: '#/components/responses/VoyageNotFound'
+  /api/v1/voyages/{voyageId}/abandon:
+    post:
+      operationId: abandonVoyage
+      tags: [Voyage]
+      summary: Abandon a Voyage
+      description: |
+        Transitions an active Voyage to ABANDONED, records the terminal timestamp,
+        and appends one ABANDONED lifecycle event. Requires an `Idempotency-Key`
+        header for safe retry.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: voyageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PublicID'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+          description: Client-supplied idempotency key for safe retry.
+      responses:
+        '200':
+          description: Voyage abandoned successfully.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidIdempotencyKey'
+        '401':
+          $ref: '#/components/responses/UnauthorizedCreate'
+        '404':
+          $ref: '#/components/responses/VoyageNotFound'
+        '409':
+          description: Voyage is not active or idempotency conflict.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                voyageNotActive:
+                  summary: Voyage is not active
+                  value:
+                    code: VOYAGE_NOT_ACTIVE
+                    message: Voyage is not active.
+                    requestId: req_123
+                idempotencyKeyReused:
+                  summary: Idempotency key reused with a different request
+                  value:
+                    code: IDEMPOTENCY_KEY_REUSED
+                    message: Idempotency key was reused with a different request.
+                    requestId: req_123
+  /api/v1/voyages/{voyageId}/history:
+    get:
+      operationId: getVoyageHistory
+      tags: [Voyage]
+      summary: Get Voyage lifecycle history
+      description: |
+        Returns the Voyage resource and its ordered append-only lifecycle events.
+        Uses the same ownership predicate and 404 behavior as the resource read.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: voyageId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PublicID'
+      responses:
+        '200':
+          description: Voyage and lifecycle history.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageHistoryResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '404':
+          $ref: '#/components/responses/VoyageNotFound'
   /api/v1/voyages/current/daily-context:
     get:
       operationId: getCurrentDailyContext
@@ -457,6 +704,53 @@ components:
         type: string
       example: tidekeepers_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
   responses:
+    InvalidIdempotencyKey:
+      description: The Idempotency-Key header is missing, empty, or malformed.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: INVALID_IDEMPOTENCY_KEY
+            message: Invalid idempotency key.
+            requestId: req_123
+    UnauthorizedCreate:
+      description: Authentication is required for mutating operations.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: AUTH_REQUIRED
+            message: Authentication is required.
+            requestId: req_123
+    VoyageNotFound:
+      description: |
+        The Voyage public ID is unknown or does not belong to the authenticated
+        player. Foreign and absent IDs are deliberately indistinguishable.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestID'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            code: VOYAGE_NOT_FOUND
+            message: Voyage not found.
+            requestId: req_123
     InvalidAuthInput:
       description: The JSON body, email address, or password did not meet the public input policy.
       headers:
@@ -717,6 +1011,127 @@ components:
           format: int32
           minimum: 1
           maximum: 100
+    VoyageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - definitionKey
+        - definitionVersion
+        - status
+        - dayNumber
+        - fundHealth
+        - maxFundHealth
+        - capital
+        - score
+        - rowVersion
+        - startedAt
+        - completedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        definitionKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Stable key of the Voyage definition backing this run.
+        definitionVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Version number of the Voyage definition.
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - COMPLETED
+            - FAILED
+            - ABANDONED
+          description: |
+            Closed set of Voyage lifecycle statuses. `COMPLETED`, `FAILED`, and
+            `ABANDONED` are terminal.
+        dayNumber:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 7
+        fundHealth:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: Current whole-number Hull/fund health.
+        maxFundHealth:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: Maximum whole-number Hull/fund health.
+        capital:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+          description: Current whole-number Supplies/capital resource.
+        score:
+          $ref: '#/components/schemas/CanonicalScore'
+        rowVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+          description: Optimistic concurrency version.
+        startedAt:
+          $ref: '#/components/schemas/UtcTimestamp'
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+          description: |
+            RFC 3339 UTC terminal timestamp, or explicitly `null` while the
+            Voyage is active.
+    LifecycleEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - eventType
+        - resultingStatus
+        - occurredAt
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        eventType:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          description: Stable lifecycle event type (e.g. `CREATED`, `ABANDONED`).
+        resultingStatus:
+          type: string
+          enum:
+            - ACTIVE
+            - COMPLETED
+            - FAILED
+            - ABANDONED
+          description: The Voyage status after this event.
+        occurredAt:
+          $ref: '#/components/schemas/UtcTimestamp'
+    VoyageHistoryResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - voyage
+        - events
+      properties:
+        voyage:
+          $ref: '#/components/schemas/VoyageResponse'
+        events:
+          type: array
+          description: Ordered append-only lifecycle events, never null.
+          items:
+            $ref: '#/components/schemas/LifecycleEvent'
     DailyContextResponse:
       type: object
       additionalProperties: false
@@ -1154,6 +1569,11 @@ components:
             - SESSION_EXPIRED
             - NO_ACTIVE_VOYAGE
             - VOYAGE_NOT_FOUND
+            - ACTIVE_VOYAGE_EXISTS
+            - VOYAGE_NOT_ACTIVE
+            - INVALID_IDEMPOTENCY_KEY
+            - IDEMPOTENCY_KEY_REUSED
+            - VOYAGE_INITIALIZATION_UNAVAILABLE
             - RATE_LIMITED
             - INTERNAL_ERROR
             - SERVICE_UNAVAILABLE
