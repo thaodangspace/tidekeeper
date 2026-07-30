@@ -182,11 +182,14 @@ func TestGetCurrentDailyContextThroughRepository(t *testing.T) {
 		accID,
 	)
 	mustExec(t, ctx, conn,
-		"INSERT INTO players (id, account_id, public_id, current_voyage_id) VALUES ($1, $2, 'plr_repo', $3)",
-		plrID, accID, voyID,
+		"INSERT INTO players (id, account_id, public_id) VALUES ($1, $2, 'plr_repo')",
+		plrID, accID,
 	)
 	mustExec(t, ctx, conn,
 		`INSERT INTO voyages (id, public_id, player_id, status, definition_version_key, current_day_number, fund_health, max_fund_health, capital, score, started_at, completed_at) VALUES ($1, 'voy_repo', $2, 'COMPLETED', 'standard', 5, 60, 100, 8, '320.0000', transaction_timestamp(), transaction_timestamp())`,
+	)
+	mustExec(t, ctx, conn,
+		"UPDATE players SET current_voyage_id = $1 WHERE id = $2",
 		voyID, plrID,
 	)
 	mustExec(t, ctx, conn,

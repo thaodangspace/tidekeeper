@@ -293,13 +293,13 @@ func validateV1Projection(p v1Projection) error {
 	if p.SelectedStrategyID != nil && *p.SelectedStrategyID != "" {
 		found := false
 		for _, s := range p.Strategies {
-			if s.ID == *p.SelectedStrategyID {
+			if s.ID == *p.SelectedStrategyID && s.Available {
 				found = true
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("selectedStrategyId %q does not match any strategy", *p.SelectedStrategyID)
+			return fmt.Errorf("selectedStrategyId %q does not match an available strategy", *p.SelectedStrategyID)
 		}
 	}
 
