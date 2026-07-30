@@ -187,6 +187,7 @@ func TestGetCurrentDailyContextThroughRepository(t *testing.T) {
 	)
 	mustExec(t, ctx, conn,
 		`INSERT INTO voyages (id, public_id, player_id, status, definition_version_key, current_day_number, fund_health, max_fund_health, capital, score, started_at, completed_at) VALUES ($1, 'voy_repo', $2, 'COMPLETED', 'standard', 5, 60, 100, 8, '320.0000', transaction_timestamp(), transaction_timestamp())`,
+		voyID, plrID,
 	)
 	mustExec(t, ctx, conn,
 		"UPDATE players SET current_voyage_id = $1 WHERE id = $2",
