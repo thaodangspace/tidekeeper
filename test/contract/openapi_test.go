@@ -34,7 +34,13 @@ func TestOpenAPIIsValid(t *testing.T) {
 		"/auth/register":                        "POST",
 		"/auth/login":                           "POST",
 		"/api/v1/me":                            "GET",
-		"/api/v1/me/keepers":                    "GET",
+		"/api/v1/me/keeper-unlocks":             "GET",
+		"/api/v1/voyages":                       "POST",
+		"/api/v1/voyages/current":               "GET",
+		"/api/v1/voyages/current/keepers":       "GET",
+		"/api/v1/voyages/{voyageId}":            "GET",
+		"/api/v1/voyages/{voyageId}/abandon":    "POST",
+		"/api/v1/voyages/{voyageId}/history":    "GET",
 		"/api/v1/voyages/current/daily-context": "GET",
 		"/health/live":                          "GET",
 		"/health/ready":                         "GET",
@@ -73,7 +79,13 @@ func TestRuntimeRoutesMatchOpenAPI(t *testing.T) {
 		"/auth/register":                        "POST",
 		"/auth/login":                           "POST",
 		"/api/v1/me":                            "GET",
-		"/api/v1/me/keepers":                    "GET",
+		"/api/v1/me/keeper-unlocks":             "GET",
+		"/api/v1/voyages":                       "POST",
+		"/api/v1/voyages/current":               "GET",
+		"/api/v1/voyages/current/keepers":       "GET",
+		"/api/v1/voyages/{voyageId}":            "GET",
+		"/api/v1/voyages/{voyageId}/abandon":    "POST",
+		"/api/v1/voyages/{voyageId}/history":    "GET",
 		"/api/v1/voyages/current/daily-context": "GET",
 		"/health/live":                          "GET",
 		"/health/ready":                         "GET",
@@ -108,14 +120,15 @@ func buildRouter(t *testing.T) chi.Router {
 	var authenticator auth.Authenticator = &nopAuth{}
 	playerSvc := player.NewService(&nopPlayerReader{})
 	me := handlers.NewMe(playerSvc)
-	keepers := handlers.NewPlayerKeepers(playerSvc)
+	keeperUnlocks := handlers.NewKeeperUnlocks(playerSvc)
 	dailySvc := daily.NewService(&nopDailyReader{})
 	dailyCtx := handlers.NewDailyContextHandler(dailySvc)
 	voyageSvc := &nopVoyageService{}
 	voyageHandler := handlers.NewVoyageHandler(voyageSvc)
+	voyageKeepers := handlers.NewVoyageKeepers(voyageSvc)
 
 	return httpapi.NewFoundationRouter(
-		health, authHandler, authenticator, me, keepers, dailyCtx, voyageHandler,
+		health, authHandler, authenticator, me, keeperUnlocks, voyageKeepers, dailyCtx, voyageHandler,
 		"sid", false, "", logger,
 	).(*chi.Mux)
 }
@@ -145,7 +158,7 @@ type nopPlayerReader struct{}
 func (n *nopPlayerReader) GetMe(_ context.Context, _ player.ID) (player.Me, error) {
 	return player.Me{}, nil
 }
-func (n *nopPlayerReader) ListKeepers(_ context.Context, _ player.ID) ([]player.Keeper, error) {
+func (n *nopPlayerReader) ListUnlocks(_ context.Context, _ player.ID) ([]player.KeeperUnlock, error) {
 	return nil, nil
 }
 
@@ -170,6 +183,9 @@ func (n *nopVoyageService) Abandon(_ context.Context, _, _, _ string) (*voyage.V
 	return nil, nil
 }
 func (n *nopVoyageService) GetHistory(_ context.Context, _, _ string) (*voyage.VoyageHistoryResponse, error) {
+	return nil, nil
+}
+func (n *nopVoyageService) GetActiveVoyageKeepers(_ context.Context, _ string) (*voyage.VoyageKeepers, error) {
 	return nil, nil
 }
 

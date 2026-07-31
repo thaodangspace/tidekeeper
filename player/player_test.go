@@ -8,7 +8,7 @@ import (
 type readerStub struct {
 	gotID   ID
 	me      Me
-	keepers []Keeper
+	unlocks []KeeperUnlock
 	err     error
 }
 
@@ -17,24 +17,24 @@ func (r *readerStub) GetMe(_ context.Context, playerID ID) (Me, error) {
 	return r.me, r.err
 }
 
-func (r *readerStub) ListKeepers(_ context.Context, playerID ID) ([]Keeper, error) {
+func (r *readerStub) ListUnlocks(_ context.Context, playerID ID) ([]KeeperUnlock, error) {
 	r.gotID = playerID
-	return r.keepers, r.err
+	return r.unlocks, r.err
 }
 
-func TestServiceListKeepers(t *testing.T) {
-	reader := &readerStub{keepers: []Keeper{{PublicID: "kpr_test", DefinitionKey: "harbor_warden", Level: 1}}}
+func TestServiceListUnlocks(t *testing.T) {
+	reader := &readerStub{unlocks: []KeeperUnlock{{DefinitionKey: "harbor_warden", DefinitionVersion: 1, UnlockSource: "SHOP"}}}
 	service := NewService(reader)
 
-	keepers, err := service.ListKeepers(context.Background(), ID("player-db-id"))
+	unlocks, err := service.ListUnlocks(context.Background(), ID("player-db-id"))
 	if err != nil {
-		t.Fatalf("ListKeepers() error = %v", err)
+		t.Fatalf("ListUnlocks() error = %v", err)
 	}
 	if reader.gotID != ID("player-db-id") {
 		t.Errorf("reader player ID = %q, want player-db-id", reader.gotID)
 	}
-	if len(keepers) != 1 || keepers[0].PublicID != "kpr_test" {
-		t.Errorf("ListKeepers() = %+v", keepers)
+	if len(unlocks) != 1 || unlocks[0].DefinitionKey != "harbor_warden" {
+		t.Errorf("ListUnlocks() = %+v", unlocks)
 	}
 }
 

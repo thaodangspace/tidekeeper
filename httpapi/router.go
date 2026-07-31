@@ -12,7 +12,7 @@ import (
 )
 
 // NewFoundationRouter builds public, authenticated, and operational routes.
-func NewFoundationRouter(health *handlers.Health, accountAuth *handlers.Auth, authenticator auth.Authenticator, playerMe *handlers.Me, playerKeepers *handlers.PlayerKeepers, dailyContext *handlers.DailyContextHandler, voyageHandler *handlers.VoyageHandler, cookieName string, cookieSecure bool, cookieDomain string, logger *slog.Logger) http.Handler {
+func NewFoundationRouter(health *handlers.Health, accountAuth *handlers.Auth, authenticator auth.Authenticator, playerMe *handlers.Me, keeperUnlocks *handlers.KeeperUnlocks, voyageKeepers *handlers.VoyageKeepers, dailyContext *handlers.DailyContextHandler, voyageHandler *handlers.VoyageHandler, cookieName string, cookieSecure bool, cookieDomain string, logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
 	router.Use(apiMiddleware.RequestID)
 	router.Use(apiMiddleware.SecurityHeaders)
@@ -24,7 +24,8 @@ func NewFoundationRouter(health *handlers.Health, accountAuth *handlers.Auth, au
 	router.Group(func(protected chi.Router) {
 		protected.Use(apiMiddleware.RequireAuthentication(authenticator, cookieName, cookieSecure, cookieDomain))
 		protected.Get("/api/v1/me", playerMe.Get)
-		protected.Get("/api/v1/me/keepers", playerKeepers.List)
+		protected.Get("/api/v1/me/keeper-unlocks", keeperUnlocks.List)
+		protected.Get("/api/v1/voyages/current/keepers", voyageKeepers.List)
 		protected.Get("/api/v1/voyages/current/daily-context", dailyContext.GetCurrent)
 		protected.Post("/api/v1/voyages", voyageHandler.Create)
 		protected.Get("/api/v1/voyages/current", voyageHandler.GetCurrent)

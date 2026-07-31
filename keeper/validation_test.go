@@ -116,3 +116,122 @@ func TestValidateRejectsInvalidCatalogContent(t *testing.T) {
 		})
 	}
 }
+
+func TestParseUpgradeTreeReturnsDeterministicProjections(t *testing.T) {
+	for _, definition := range CatalogV1().Definitions {
+		nodes, err := parseUpgradeTree(definition.UpgradeTree)
+		if err != nil {
+			t.Fatalf("parseUpgradeTree(%q): %v", definition.Key, err)
+		}
+		if len(nodes) != 3 {
+			t.Fatalf("%q node count = %d, want 3", definition.Key, len(nodes))
+		}
+		rootCount := 0
+		depths := make(map[string]int16, len(nodes))
+		for i, node := range nodes {
+			if node.IsRoot {
+				rootCount++
+				if node.Depth != 0 {
+					t.Errorf("%q root node %q has depth %d, want 0", definition.Key, node.Key, node.Depth)
+				}
+			}
+			depths[node.Key] = node.Depth
+			if i > 0 && nodes[i-1].Key >= node.Key {
+				t.Errorf("%q nodes are not sorted: %q then %q", definition.Key, nodes[i-1].Key, node.Key)
+			}
+		}
+		if rootCount != 1 {
+			t.Errorf("%q root count = %d, want 1", definition.Key, rootCount)
+		}
+		if len(depths) != 3 {
+			t.Errorf("%q unique node keys = %d, want 3", definition.Key, len(depths))
+		}
+	}
+}
+
+func TestParseUpgradeTreeRejectsInvalidGraphs(t *testing.T) {
+	tests := []struct {
+		name string
+		tree string
+		want string
+	}{
+		{
+			name: "cycle",
+			tree: `{
+				"rootNodeKey":"base",
+				"nodes":[
+					{"key":"base","name":"Base","next":["first"],"effects":{}},
+					{"key":"first","name":"First","next":["base"],"effects":{}}
+				]
+			}`,
+			want: "upgrade root has an incoming edge",
+		},
+		{
+			name: "disconnected",
+			tree: `{
+				"rootNodeKey":"base",
+				"nodes":[
+					{"key":"base","name":"Base","next":["first"],"effects":{}},
+					{"key":"first","name":"First","next":[],"effects":{}},
+					{"key":"second","name":"Second","next":[],"effects":{}}
+				]
+			}`,
+			want: "must have exactly one parent",
+		},
+		{
+			name: "unknown child",
+			tree: `{
+				"rootNodeKey":"base",
+				"nodes":[
+					{"key":"base","name":"Base","next":["missing"],"effects":{}}
+				]
+			}`,
+			want: "references unknown node",
+		},
+		{
+			name: "root not a node",
+			tree: `{
+				"rootNodeKey":"absent",
+				"nodes":[
+					{"key":"base","name":"Base","next":[],"effects":{}}
+				]
+			}`,
+			want: "is not a node",
+		},
+		{
+			name: "multiple parents",
+			tree: `{
+				"rootNodeKey":"base",
+				"nodes":[
+					{"key":"base","name":"Base","next":["first"],"effects":{}},
+					{"key":"first","name":"First","next":[],"effects":{}}
+				]
+			}`,
+			want: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			nodes, err := parseUpgradeTree(json.RawMessage(test.tree))
+			if test.want != "" {
+				if err == nil || !strings.Contains(err.Error(), test.want) {
+					t.Fatalf("parseUpgradeTree() error = %v, want substring %q", err, test.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseUpgradeTree() error = %v, want nil", err)
+			}
+			if len(nodes) != 2 {
+				t.Fatalf("node count = %d, want 2", len(nodes))
+			}
+			if !nodes[0].IsRoot || nodes[0].Key != "base" || nodes[0].Depth != 0 {
+				t.Errorf("first node = %+v, want root base at depth 0", nodes[0])
+			}
+			if nodes[1].IsRoot || nodes[1].Key != "first" || nodes[1].Depth != 1 {
+				t.Errorf("second node = %+v, want first at depth 1", nodes[1])
+			}
+		})
+	}
+}

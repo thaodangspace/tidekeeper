@@ -14,6 +14,7 @@ type Querier interface {
 	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (IdempotencyKey, error)
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	CountCatalogReleaseRows(ctx context.Context, releaseVersion int64) (CountCatalogReleaseRowsRow, error)
+	CountKeeperUpgradeNodesForRelease(ctx context.Context, releaseVersion int64) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) error
 	CreateDraftContentRelease(ctx context.Context, arg CreateDraftContentReleaseParams) error
 	CreatePlayer(ctx context.Context, arg CreatePlayerParams) error
@@ -43,6 +44,7 @@ type Querier interface {
 	InsertBasketMetric(ctx context.Context, arg InsertBasketMetricParams) error
 	InsertBasketMetricComponent(ctx context.Context, arg InsertBasketMetricComponentParams) error
 	InsertExpectedTurbulencePolicy(ctx context.Context, arg InsertExpectedTurbulencePolicyParams) error
+	InsertKeeperDefinitionUpgradeNode(ctx context.Context, arg InsertKeeperDefinitionUpgradeNodeParams) error
 	InsertKeeperDefinitionVersion(ctx context.Context, arg InsertKeeperDefinitionVersionParams) error
 	InsertKeeperInstance(ctx context.Context, arg InsertKeeperInstanceParams) error
 	InsertKeeperSectorResult(ctx context.Context, arg InsertKeeperSectorResultParams) error
@@ -56,11 +58,12 @@ type Querier interface {
 	InsertVoyage(ctx context.Context, arg InsertVoyageParams) (InsertVoyageRow, error)
 	InsertVoyageLedgerEntry(ctx context.Context, arg InsertVoyageLedgerEntryParams) error
 	InsertVoyageLifecycleEvent(ctx context.Context, arg InsertVoyageLifecycleEventParams) error
+	ListActiveVoyageKeepersForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListActiveVoyageKeepersForPlayerRow, error)
 	ListBasketCalculationMappingComponents(ctx context.Context, basketMappingVersionID pgtype.UUID) ([]BasketMappingComponent, error)
 	ListBasketMetricComponents(ctx context.Context, basketMetricID pgtype.UUID) ([]BasketMetricComponent, error)
-	ListKeeperInstancesForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListKeeperInstancesForPlayerRow, error)
 	ListLifecycleEventsForVoyage(ctx context.Context, voyageID pgtype.UUID) ([]VoyageLifecycleEvent, error)
 	ListMarketPriceObservationsForAsset(ctx context.Context, arg ListMarketPriceObservationsForAssetParams) ([]MarketPriceObservation, error)
+	ListPlayerKeeperUnlocks(ctx context.Context, playerID pgtype.UUID) ([]ListPlayerKeeperUnlocksRow, error)
 	ListReadyBasketMetricsForSectorBenchmark(ctx context.Context, arg ListReadyBasketMetricsForSectorBenchmarkParams) ([]BasketMetric, error)
 	ListSectorBenchmarkMembers(ctx context.Context, sectorBenchmarkID pgtype.UUID) ([]SectorBenchmarkMember, error)
 	ListTargetBasketCalculationMappingsForContent(ctx context.Context, contentVersion int64) ([]ListTargetBasketCalculationMappingsForContentRow, error)

@@ -43,6 +43,83 @@ func TestVoyageCreateAndRejectSecond(t *testing.T) {
 	checkLedgerEntries(t, ctx, conn, resp.PublicID, 2)
 }
 
+func TestVoyageCreateGrantsRootNodeStarterInstance(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := databaseURL(t)
+
+	conn, pool, cleanup := setupVoyageTest(t, ctx, databaseURL, "voyage_starter")
+	defer cleanup()
+
+	svc := voyage.NewService(pool)
+
+	resp, err := svc.Create(ctx, voyagePlrOneID, "key-starter-create")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	voyageRow, err := query.New(conn).GetVoyageByPublicID(ctx, resp.PublicID)
+	if err != nil {
+		t.Fatalf("GetVoyageByPublicID: %v", err)
+	}
+
+	var (
+		upgradeNodeKey string
+		acquiredDay    int16
+		acquiredSource string
+		unlockCount    int
+	)
+	if err := conn.QueryRow(ctx, `
+		SELECT i.upgrade_node_key, i.acquired_day, i.acquired_source
+		FROM keeper_instances AS i
+		WHERE i.voyage_id = $1
+	`, voyageRow.ID).Scan(&upgradeNodeKey, &acquiredDay, &acquiredSource); err != nil {
+		t.Fatalf("load starter instance: %v", err)
+	}
+	if upgradeNodeKey != "base" {
+		t.Errorf("starter upgrade node = %q, want base", upgradeNodeKey)
+	}
+	if acquiredDay != 1 {
+		t.Errorf("starter acquired day = %d, want 1", acquiredDay)
+	}
+	if acquiredSource != "STARTER" {
+		t.Errorf("starter acquired source = %q, want STARTER", acquiredSource)
+	}
+
+	inventory, err := svc.GetActiveVoyageKeepers(ctx, voyagePlrOneID)
+	if err != nil {
+		t.Fatalf("GetActiveVoyageKeepers: %v", err)
+	}
+	if inventory.VoyageID != resp.PublicID {
+		t.Errorf("inventory voyage ID = %q, want %q", inventory.VoyageID, resp.PublicID)
+	}
+	if len(inventory.Keepers) != 1 {
+		t.Fatalf("inventory keeper count = %d, want 1", len(inventory.Keepers))
+	}
+	keeper := inventory.Keepers[0]
+	if keeper.DefinitionKey != "crest_sovereign" {
+		t.Errorf("keeper definition key = %q, want crest_sovereign", keeper.DefinitionKey)
+	}
+	if keeper.DefinitionVersion != 1 {
+		t.Errorf("keeper definition version = %d, want 1", keeper.DefinitionVersion)
+	}
+	if keeper.UpgradeNodeKey != "base" {
+		t.Errorf("keeper upgrade node = %q, want base", keeper.UpgradeNodeKey)
+	}
+	if keeper.Level != 1 {
+		t.Errorf("keeper level = %d, want 1", keeper.Level)
+	}
+	if keeper.AcquiredDay != 1 || keeper.AcquiredSource != "STARTER" {
+		t.Errorf("keeper acquisition = day %d source %q, want 1/STARTER", keeper.AcquiredDay, keeper.AcquiredSource)
+	}
+
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM player_keeper_unlocks WHERE player_id = $1", voyagePlrOneID).Scan(&unlockCount); err != nil {
+		t.Fatalf("count unlocks: %v", err)
+	}
+	if unlockCount != 0 {
+		t.Errorf("unlock count = %d, want 0 (starter instances are not permanent unlocks)", unlockCount)
+	}
+}
+
 func TestVoyageCreateIdempotent(t *testing.T) {
 	ctx := context.Background()
 	databaseURL := databaseURL(t)
@@ -356,10 +433,11 @@ func TestVoyageAtomicRollbackOnFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Create: %v", err)
 	}
-	var firstVoyageID pgtype.UUID
-	if err := firstVoyageID.Scan(resp.PublicID); err != nil {
-		t.Fatalf("parse voyage public ID: %v", err)
+	firstVoyageRow, err := query.New(conn).GetVoyageByPublicID(ctx, resp.PublicID)
+	if err != nil {
+		t.Fatalf("GetVoyageByPublicID: %v", err)
 	}
+	firstVoyageID := firstVoyageRow.ID
 
 	_, err = svc.Create(ctx, voyagePlrOneID, "key-rollback-fail")
 	if !errors.Is(err, voyage.ErrActiveVoyageExists) {
@@ -379,7 +457,7 @@ func TestVoyageAtomicRollbackOnFailure(t *testing.T) {
 	if err := conn.QueryRow(ctx, "SELECT count(*) FROM voyage_ledger_entries WHERE voyage_id = $1", firstVoyageID).Scan(&counts.ledgerEntries); err != nil {
 		t.Fatalf("count ledger entries: %v", err)
 	}
-	if err := conn.QueryRow(ctx, "SELECT count(*) FROM keeper_instances WHERE player_id = $1", voyagePlrOneID).Scan(&counts.keeperInst); err != nil {
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM keeper_instances AS i JOIN voyages AS v ON v.id = i.voyage_id WHERE v.player_id = $1", voyagePlrOneID).Scan(&counts.keeperInst); err != nil {
 		t.Fatalf("count keeper instances: %v", err)
 	}
 	if err := conn.QueryRow(ctx, "SELECT count(*) FROM voyage_lifecycle_events WHERE voyage_id = $1", firstVoyageID).Scan(&counts.lifecycleEvts); err != nil {
@@ -450,6 +528,8 @@ func setupVoyageTest(t *testing.T, ctx context.Context, databaseURL, schemaPrefi
 	applyMigration(t, ctx, conn, "000003_auth_credentials.up.sql")
 	applyMigration(t, ctx, conn, "000004_player_keeper_instances.up.sql")
 	applyMigration(t, ctx, conn, "000006_voyage_lifecycle.up.sql")
+	applyMigration(t, ctx, conn, "000007_keeper_definition_upgrade_nodes.up.sql")
+	applyMigration(t, ctx, conn, "000008_meta_and_voyage_keeper_inventory.up.sql")
 
 	mustExec(t, ctx, conn,
 		"INSERT INTO accounts (id, email, password_hash) VALUES ($1, 'a@voy.test', 'hash-a'), ($2, 'b@voy.test', 'hash-b')",

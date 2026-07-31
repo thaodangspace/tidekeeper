@@ -89,6 +89,16 @@ INSERT INTO keeper_definition_versions (
     sqlc.arg(basket_mapping_version_id)
 );
 
+-- name: InsertKeeperDefinitionUpgradeNode :exec
+INSERT INTO keeper_definition_upgrade_nodes (keeper_definition_version_id, node_key, depth, is_root)
+VALUES (sqlc.arg(keeper_definition_version_id), sqlc.arg(node_key), sqlc.arg(depth), sqlc.arg(is_root));
+
+-- name: CountKeeperUpgradeNodesForRelease :one
+SELECT count(*)::bigint AS node_count
+FROM keeper_definition_upgrade_nodes AS n
+JOIN keeper_definition_versions AS k ON k.id = n.keeper_definition_version_id
+WHERE k.content_version = sqlc.arg(release_version);
+
 -- name: CountCatalogReleaseRows :one
 SELECT
     (SELECT count(*) FROM keeper_definition_versions AS k WHERE k.content_version = sqlc.arg(release_version))::bigint AS definition_count,
@@ -96,4 +106,8 @@ SELECT
     (SELECT count(*)
      FROM basket_mapping_components AS c
      JOIN basket_mapping_versions AS m ON m.id = c.basket_mapping_version_id
-     WHERE m.content_version = sqlc.arg(release_version))::bigint AS component_count;
+     WHERE m.content_version = sqlc.arg(release_version))::bigint AS component_count,
+    (SELECT count(*)
+     FROM keeper_definition_upgrade_nodes AS n
+     JOIN keeper_definition_versions AS k ON k.id = n.keeper_definition_version_id
+     WHERE k.content_version = sqlc.arg(release_version))::bigint AS node_count;

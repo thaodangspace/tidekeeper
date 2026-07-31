@@ -1,0 +1,4 @@
+DROP TRIGGER IF EXISTS keeper_definition_upgrade_nodes_draft_only_trigger ON keeper_definition_upgrade_nodes;
+DROP FUNCTION IF EXISTS keeper_catalog_guard_upgrade_node_mutation();
+DROP FUNCTION IF EXISTS keeper_catalog_upgrade_node_content_version(uuid);
+DROP TABLE IF EXISTS keeper_definition_upgrade_nodes;

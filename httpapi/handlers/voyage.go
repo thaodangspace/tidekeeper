@@ -161,6 +161,11 @@ func (h *VoyageHandler) GetHistory(writer http.ResponseWriter, request *http.Req
 }
 
 func (h *VoyageHandler) writeError(writer http.ResponseWriter, request *http.Request, err error) {
+	writeVoyageAPIError(writer, request, err)
+}
+
+// writeVoyageAPIError maps Voyage service errors to stable public responses.
+func writeVoyageAPIError(writer http.ResponseWriter, request *http.Request, err error) {
 	writer.Header().Set("Cache-Control", "private, no-store")
 
 	switch {
