@@ -176,9 +176,11 @@ CREATE TRIGGER voyage_definition_versions_published_immutable_trigger
     FOR EACH ROW EXECUTE FUNCTION voyage_definition_guard_published_immutability();
 
 -- ── Seed MVP catalog content (market assets, basket mapping, keeper) ────────
+-- The content release is assembled as DRAFT so its guarded children can be
+-- inserted, then published only after the child data is complete.
 
 INSERT INTO content_releases (version, status, checksum)
-VALUES (1, 'PUBLISHED', decode('0101010101010101010101010101010101010101010101010101010101010101', 'hex'));
+VALUES (1, 'DRAFT', decode('0101010101010101010101010101010101010101010101010101010101010101', 'hex'));
 
 INSERT INTO market_assets (id, asset_key, symbol)
 VALUES ('00000000-0000-0000-0000-000000000001', 'bitcoin', 'BTC'),
@@ -201,21 +203,35 @@ INSERT INTO keeper_definition_versions (
     'crest_sovereign', 1, 'Crest Sovereign',
     'sovereign_current', 'Sovereign Current',
     'CREST', 'VANGUARD', 'COMMON', 'LOW_TO_MEDIUM',
-    'TEST_RULE', '{}'::jsonb, '{}'::jsonb,
+    'TEST_RULE', '{}'::jsonb,
+    '{
+        "rootNodeKey":"base",
+        "nodes":[
+            {"key":"base","name":"Base","next":["deep_crown","rising_throne"],"effects":{}},
+            {"key":"deep_crown","name":"Deep Crown","next":[],"effects":{"broadDeclineDepthPenaltyReductionBps":2500}},
+            {"key":"rising_throne","name":"Rising Throne","next":[],"effects":{"sectorRelativeScoreBonusBps":null}}
+        ]
+    }'::jsonb,
     '00000000-0000-0000-0000-000000000011'
 );
 
+UPDATE content_releases
+SET status = 'PUBLISHED', published_at = transaction_timestamp()
+WHERE version = 1;
+
 -- ── Standard MVP definition with starter Keeper and initial shop ────────────
+-- The voyage definition is also assembled as DRAFT so its guarded starter and
+-- initial-shop children can be inserted before it is published.
 
 INSERT INTO voyage_definition_versions (
     id, definition_key, version, status, duration_days,
     starting_hull, starting_supplies, fleet_slot_count, initial_phase,
-    launch_presentation, checksum, published_at
+    launch_presentation, checksum
 ) VALUES (
     '00000000-0000-0000-0000-000000000002',
     'standard',
     1,
-    'PUBLISHED',
+    'DRAFT',
     7,
     100,
     10,
@@ -236,8 +252,7 @@ INSERT INTO voyage_definition_versions (
         "selectedStrategyId":null,
         "pendingRewardCount":0
     }'::jsonb,
-    decode('7374616e64617264000000000000000000000000000000000000000000000000', 'hex'),
-    transaction_timestamp()
+    decode('7374616e64617264000000000000000000000000000000000000000000000000', 'hex')
 );
 
 INSERT INTO voyage_definition_starter_keepers (voyage_definition_version_id, keeper_definition_version_id, position)
@@ -246,17 +261,21 @@ VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000
 INSERT INTO voyage_definition_initial_shop_offers (voyage_definition_version_id, keeper_definition_version_id, position, cost)
 VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000021', 0, 5);
 
+UPDATE voyage_definition_versions
+SET status = 'PUBLISHED', published_at = transaction_timestamp()
+WHERE id = '00000000-0000-0000-0000-000000000002';
+
 -- ── Legacy definition for existing development voyages ─────────────────────
 
 INSERT INTO voyage_definition_versions (
     id, definition_key, version, status, duration_days,
     starting_hull, starting_supplies, fleet_slot_count, initial_phase,
-    launch_presentation, checksum, published_at
+    launch_presentation, checksum
 ) VALUES (
     '00000000-0000-0000-0000-000000000001',
     'legacy',
     1,
-    'PUBLISHED',
+    'DRAFT',
     7,
     100,
     10,
@@ -277,9 +296,12 @@ INSERT INTO voyage_definition_versions (
         "selectedStrategyId":null,
         "pendingRewardCount":0
     }'::jsonb,
-    decode('6c65676163790000000000000000000000000000000000000000000000000000', 'hex'),
-    transaction_timestamp()
+    decode('6c65676163790000000000000000000000000000000000000000000000000000', 'hex')
 );
+
+UPDATE voyage_definition_versions
+SET status = 'PUBLISHED', published_at = transaction_timestamp()
+WHERE id = '00000000-0000-0000-0000-000000000001';
 
 -- ── Add voyage_definition_version_id to voyages ────────────────────────────
 

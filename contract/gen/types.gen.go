@@ -188,6 +188,42 @@ type KeeperSummary struct {
 	Sector ExtensibleToken `json:"sector"`
 }
 
+// KeeperUnlockSummary defines model for KeeperUnlockSummary.
+type KeeperUnlockSummary struct {
+	// CurrentName Trusted public plain text; raw HTML and provider text are prohibited.
+	CurrentName PublicName `json:"currentName"`
+
+	// DefinitionKey Stable key of the Keeper archetype that was originally unlocked.
+	DefinitionKey string `json:"definitionKey"`
+
+	// DefinitionVersion Exact immutable definition version that originally granted this unlock.
+	DefinitionVersion int64 `json:"definitionVersion"`
+
+	// Name Trusted public plain text; raw HTML and provider text are prohibited.
+	Name PublicName `json:"name"`
+
+	// Rarity Forward-compatible uppercase token. Clients must safely handle values added later.
+	Rarity ExtensibleToken `json:"rarity"`
+
+	// Role Forward-compatible uppercase token. Clients must safely handle values added later.
+	Role ExtensibleToken `json:"role"`
+
+	// Sector Forward-compatible uppercase token. Clients must safely handle values added later.
+	Sector ExtensibleToken `json:"sector"`
+
+	// UnlockSource Forward-compatible uppercase token. Clients must safely handle values added later.
+	UnlockSource ExtensibleToken `json:"unlockSource"`
+
+	// UnlockedAt RFC 3339 UTC `Z` timestamp when the archetype was unlocked.
+	UnlockedAt time.Time `json:"unlockedAt"`
+}
+
+// KeeperUnlocksResponse defines model for KeeperUnlocksResponse.
+type KeeperUnlocksResponse struct {
+	// Unlocks Permanent Keeper archetype unlocks, ordered by unlock time.
+	Unlocks []KeeperUnlockSummary `json:"unlocks"`
+}
+
 // LifecycleEvent defines model for LifecycleEvent.
 type LifecycleEvent struct {
 	// EventType Stable lifecycle event type (e.g. `CREATED`, `ABANDONED`).
@@ -277,37 +313,6 @@ type ObjectiveSummary struct {
 
 	// RewardLabel Public-safe reward text, or explicitly `null` when no reward label applies.
 	RewardLabel *string `json:"rewardLabel"`
-}
-
-// PlayerKeeperSummary defines model for PlayerKeeperSummary.
-type PlayerKeeperSummary struct {
-	// CurrentName Trusted public plain text; raw HTML and provider text are prohibited.
-	CurrentName PublicName `json:"currentName"`
-
-	// DefinitionKey Stable key of the Keeper definition backing this instance.
-	DefinitionKey string `json:"definitionKey"`
-
-	// Id Stable non-sequential public identifier.
-	Id    PublicID `json:"id"`
-	Level int32    `json:"level"`
-
-	// Name Trusted public plain text; raw HTML and provider text are prohibited.
-	Name PublicName `json:"name"`
-
-	// Rarity Forward-compatible uppercase token. Clients must safely handle values added later.
-	Rarity ExtensibleToken `json:"rarity"`
-
-	// Role Forward-compatible uppercase token. Clients must safely handle values added later.
-	Role ExtensibleToken `json:"role"`
-
-	// Sector Forward-compatible uppercase token. Clients must safely handle values added later.
-	Sector ExtensibleToken `json:"sector"`
-}
-
-// PlayerKeepersResponse defines model for PlayerKeepersResponse.
-type PlayerKeepersResponse struct {
-	// Keepers Player-owned Keeper instances, ordered by acquisition time.
-	Keepers []PlayerKeeperSummary `json:"keepers"`
 }
 
 // PublicID Stable non-sequential public identifier.
@@ -421,6 +426,55 @@ type VoyageHistoryResponse struct {
 	// Events Ordered append-only lifecycle events, never null.
 	Events []LifecycleEvent `json:"events"`
 	Voyage VoyageResponse   `json:"voyage"`
+}
+
+// VoyageKeeperSummary defines model for VoyageKeeperSummary.
+type VoyageKeeperSummary struct {
+	// AcquiredAt RFC 3339 UTC `Z` timestamp when the instance was acquired.
+	AcquiredAt  time.Time `json:"acquiredAt"`
+	AcquiredDay int32     `json:"acquiredDay"`
+
+	// AcquiredSource Acquisition category that granted this instance.
+	AcquiredSource string `json:"acquiredSource"`
+
+	// CurrentName Trusted public plain text; raw HTML and provider text are prohibited.
+	CurrentName PublicName `json:"currentName"`
+
+	// DefinitionKey Stable key of the Keeper definition backing this instance.
+	DefinitionKey string `json:"definitionKey"`
+
+	// DefinitionVersion Exact immutable definition version backing this instance.
+	DefinitionVersion int64 `json:"definitionVersion"`
+
+	// Id Stable non-sequential public identifier.
+	Id PublicID `json:"id"`
+
+	// Level Derived from normalized upgrade node depth plus one; never stored.
+	Level int32 `json:"level"`
+
+	// Name Trusted public plain text; raw HTML and provider text are prohibited.
+	Name PublicName `json:"name"`
+
+	// Rarity Forward-compatible uppercase token. Clients must safely handle values added later.
+	Rarity ExtensibleToken `json:"rarity"`
+
+	// Role Forward-compatible uppercase token. Clients must safely handle values added later.
+	Role ExtensibleToken `json:"role"`
+
+	// Sector Forward-compatible uppercase token. Clients must safely handle values added later.
+	Sector ExtensibleToken `json:"sector"`
+
+	// UpgradeNodeKey Authoritative upgrade node within the exact definition version.
+	UpgradeNodeKey string `json:"upgradeNodeKey"`
+}
+
+// VoyageKeepersResponse defines model for VoyageKeepersResponse.
+type VoyageKeepersResponse struct {
+	// Keepers Keeper instances owned by the current Voyage, ordered by acquisition.
+	Keepers []VoyageKeeperSummary `json:"keepers"`
+
+	// VoyageId Stable non-sequential public identifier.
+	VoyageId PublicID `json:"voyageId"`
 }
 
 // VoyageResponse defines model for VoyageResponse.

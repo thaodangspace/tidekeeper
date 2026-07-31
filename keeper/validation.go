@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sort"
 )
 
 var (
@@ -179,91 +178,8 @@ func parameterSet(parameters ...string) map[string]struct{} {
 }
 
 func validateUpgradeTree(tree json.RawMessage) error {
-	var parsed struct {
-		RootNodeKey string `json:"rootNodeKey"`
-		Nodes       []struct {
-			Key     string          `json:"key"`
-			Name    string          `json:"name"`
-			Next    []string        `json:"next"`
-			Effects json.RawMessage `json:"effects"`
-		} `json:"nodes"`
-	}
-	if len(tree) == 0 || !isJSONObject(tree) || json.Unmarshal(tree, &parsed) != nil {
-		return errors.New("upgrade tree must be a JSON object")
-	}
-	if !contentKeyPattern.MatchString(parsed.RootNodeKey) || len(parsed.Nodes) == 0 {
-		return errors.New("upgrade tree requires a valid rootNodeKey and nodes")
-	}
-
-	nextByKey := make(map[string][]string, len(parsed.Nodes))
-	inDegree := make(map[string]int, len(parsed.Nodes))
-	for _, node := range parsed.Nodes {
-		if !contentKeyPattern.MatchString(node.Key) {
-			return fmt.Errorf("upgrade node %q has an invalid key", node.Key)
-		}
-		if node.Name == "" || !isJSONObject(node.Effects) {
-			return fmt.Errorf("upgrade node %q must have a name and object effects", node.Key)
-		}
-		if _, exists := nextByKey[node.Key]; exists {
-			return fmt.Errorf("duplicate upgrade node key %q", node.Key)
-		}
-		nextByKey[node.Key] = node.Next
-		inDegree[node.Key] = 0
-	}
-	if _, exists := nextByKey[parsed.RootNodeKey]; !exists {
-		return fmt.Errorf("upgrade root %q is not a node", parsed.RootNodeKey)
-	}
-	for nodeKey, next := range nextByKey {
-		for _, childKey := range next {
-			if _, exists := nextByKey[childKey]; !exists {
-				return fmt.Errorf("upgrade node %q references unknown node %q", nodeKey, childKey)
-			}
-			inDegree[childKey]++
-		}
-	}
-	if inDegree[parsed.RootNodeKey] != 0 {
-		return errors.New("upgrade root has an incoming edge")
-	}
-	for nodeKey, degree := range inDegree {
-		if nodeKey != parsed.RootNodeKey && degree != 1 {
-			return fmt.Errorf("upgrade node %q must have exactly one parent", nodeKey)
-		}
-	}
-
-	visiting := make(map[string]bool, len(nextByKey))
-	visited := make(map[string]bool, len(nextByKey))
-	var visit func(string) error
-	visit = func(nodeKey string) error {
-		if visiting[nodeKey] {
-			return fmt.Errorf("upgrade tree contains cycle at %q", nodeKey)
-		}
-		if visited[nodeKey] {
-			return nil
-		}
-		visiting[nodeKey] = true
-		for _, childKey := range nextByKey[nodeKey] {
-			if err := visit(childKey); err != nil {
-				return err
-			}
-		}
-		visiting[nodeKey] = false
-		visited[nodeKey] = true
-		return nil
-	}
-	if err := visit(parsed.RootNodeKey); err != nil {
-		return err
-	}
-	if len(visited) != len(nextByKey) {
-		keys := make([]string, 0, len(nextByKey)-len(visited))
-		for key := range nextByKey {
-			if !visited[key] {
-				keys = append(keys, key)
-			}
-		}
-		sort.Strings(keys)
-		return fmt.Errorf("upgrade tree is disconnected at %q", keys[0])
-	}
-	return nil
+	_, err := parseUpgradeTree(tree)
+	return err
 }
 
 var calculationSectorKeys = tokenSet("CREST", "EMBER", "CURRENT", "HARBOR")

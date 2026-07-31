@@ -12,9 +12,13 @@ LIMIT 1;
 SELECT vk.voyage_definition_version_id, vk.keeper_definition_version_id, vk.position,
        k.keeper_key, k.name, k.current_key, k.current_name,
        k.sector_key, k.role_key, k.rarity_key, k.passive_rule_key,
-       k.passive_rule_config
+       k.passive_rule_config,
+       n.node_key AS root_upgrade_node_key
 FROM voyage_definition_starter_keepers AS vk
 JOIN keeper_definition_versions AS k ON k.id = vk.keeper_definition_version_id
+JOIN keeper_definition_upgrade_nodes AS n
+    ON n.keeper_definition_version_id = k.id
+   AND n.is_root
 WHERE vk.voyage_definition_version_id = sqlc.arg(voyage_definition_version_id)
 ORDER BY vk.position;
 
@@ -58,9 +62,37 @@ WHERE id = sqlc.arg(id)
 FOR UPDATE;
 
 -- name: InsertKeeperInstance :exec
-INSERT INTO keeper_instances (id, public_id, player_id, keeper_definition_version_id, level, voyage_id)
-VALUES (sqlc.arg(id), sqlc.arg(public_id), sqlc.arg(player_id),
-        sqlc.arg(keeper_definition_version_id), 1, sqlc.arg(voyage_id));
+INSERT INTO keeper_instances (id, public_id, voyage_id, keeper_definition_version_id,
+                              upgrade_node_key, acquired_day, acquired_source)
+VALUES (sqlc.arg(id), sqlc.arg(public_id), sqlc.arg(voyage_id),
+        sqlc.arg(keeper_definition_version_id), sqlc.arg(upgrade_node_key),
+        sqlc.arg(acquired_day), sqlc.arg(acquired_source));
+
+-- name: ListVoyageKeepers :many
+SELECT
+    v.id AS voyage_id,
+    v.public_id AS voyage_public_id,
+    i.public_id AS keeper_public_id,
+    d.keeper_key AS definition_key,
+    d.content_version AS definition_version,
+    d.name,
+    d.current_name,
+    d.sector_key,
+    d.role_key,
+    d.rarity_key,
+    n.depth AS node_depth,
+    i.upgrade_node_key,
+    i.acquired_day,
+    i.acquired_source,
+    i.acquired_at
+FROM voyages AS v
+JOIN keeper_instances AS i ON i.voyage_id = v.id
+JOIN keeper_definition_versions AS d ON d.id = i.keeper_definition_version_id
+JOIN keeper_definition_upgrade_nodes AS n
+    ON n.keeper_definition_version_id = i.keeper_definition_version_id
+   AND n.node_key = i.upgrade_node_key
+WHERE v.id = sqlc.arg(voyage_id)
+ORDER BY i.acquired_day ASC, i.acquired_at ASC, i.id ASC;
 
 -- name: InsertPlayerDailyStateWithView :exec
 WITH inserted_state AS (

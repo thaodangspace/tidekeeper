@@ -62,6 +62,24 @@ func TestCatalogV1IsCompleteAndValid(t *testing.T) {
 		if tree.RootNodeKey != "base" || len(tree.Nodes) != 3 {
 			t.Errorf("Keeper %q upgrade tree = root %q with %d nodes, want base with 3 nodes", definition.Key, tree.RootNodeKey, len(tree.Nodes))
 		}
+		nodes, err := parseUpgradeTree(definition.UpgradeTree)
+		if err != nil {
+			t.Fatalf("parse upgrade tree for %q: %v", definition.Key, err)
+		}
+		if len(nodes) != 3 {
+			t.Errorf("Keeper %q normalized node count = %d, want 3", definition.Key, len(nodes))
+		}
+	}
+	totalNodes := 0
+	for _, definition := range release.Definitions {
+		nodes, err := parseUpgradeTree(definition.UpgradeTree)
+		if err != nil {
+			t.Fatalf("parse upgrade tree for %q: %v", definition.Key, err)
+		}
+		totalNodes += len(nodes)
+	}
+	if totalNodes != 30 {
+		t.Fatalf("CatalogV1 total upgrade nodes = %d, want 30", totalNodes)
 	}
 }
 
@@ -74,6 +92,17 @@ func TestCatalogV2ConfiguresFourEligibleSectors(t *testing.T) {
 	}
 	if release.Version != 2 || len(release.Definitions) != 13 || len(release.Baskets) != 13 {
 		t.Fatalf("CatalogV2 shape = version:%d definitions:%d baskets:%d", release.Version, len(release.Definitions), len(release.Baskets))
+	}
+	totalNodes := 0
+	for _, definition := range release.Definitions {
+		nodes, err := parseUpgradeTree(definition.UpgradeTree)
+		if err != nil {
+			t.Fatalf("parse upgrade tree for %q: %v", definition.Key, err)
+		}
+		totalNodes += len(nodes)
+	}
+	if totalNodes != 39 {
+		t.Fatalf("CatalogV2 total upgrade nodes = %d, want 39", totalNodes)
 	}
 	counts := map[string]int{}
 	for _, basket := range release.Baskets {

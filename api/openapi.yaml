@@ -115,20 +115,21 @@ paths:
           $ref: '#/components/responses/InternalErrorRead'
         '503':
           $ref: '#/components/responses/ServiceUnavailableRead'
-  /api/v1/me/keepers:
+  /api/v1/me/keeper-unlocks:
     get:
-      operationId: listMyKeepers
+      operationId: listMyKeeperUnlocks
       tags: [Player]
-      summary: List the authenticated player's Keepers
+      summary: List the authenticated player's permanent Keeper unlocks
       description: |
-        Returns Keeper instances permanently owned by the player associated with
-        the opaque session cookie. The collection is empty when the player has
-        not acquired any Keepers.
+        Returns the Keeper archetypes permanently unlocked by the player
+        associated with the opaque session cookie. The collection is empty when
+        the player has not unlocked any Keepers. Unlocks persist between
+        Voyages and never carry run-scoped upgrade state.
       security:
         - sessionCookie: []
       responses:
         '200':
-          description: Player-owned Keeper inventory.
+          description: Player-owned Keeper unlocks.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestID'
@@ -137,21 +138,83 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlayerKeepersResponse'
+                $ref: '#/components/schemas/KeeperUnlocksResponse'
               example:
-                keepers:
-                  - id: kpr_123
-                    definitionKey: harbor_warden
-                    name: Harbor Warden
-                    currentName: Harbor Current
-                    sector: HARBOR
-                    role: WARDEN
+                unlocks:
+                  - definitionKey: crest_sovereign
+                    definitionVersion: 1
+                    name: Crest Sovereign
+                    currentName: Sovereign Current
+                    sector: CREST
+                    role: VANGUARD
                     rarity: COMMON
-                    level: 1
+                    unlockSource: LEGACY_MIGRATION
+                    unlockedAt: 2026-01-15T08:30:00Z
         '401':
           $ref: '#/components/responses/UnauthorizedRead'
         '429':
           $ref: '#/components/responses/RateLimitedRead'
+        '500':
+          $ref: '#/components/responses/InternalErrorRead'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableRead'
+  /api/v1/voyages/current/keepers:
+    get:
+      operationId: getCurrentVoyageKeepers
+      tags: [Voyage]
+      summary: Get the current Voyage's Keeper inventory
+      description: |
+        Returns the Keeper instances owned by the authenticated player's
+        currently active Voyage. Responds with `404` / `NO_ACTIVE_VOYAGE` when
+        no active Voyage exists, including after the last Voyage has reached a
+        terminal state. Voyage instances never leak between runs.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current Voyage Keeper inventory.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageKeepersResponse'
+              example:
+                voyageId: voy_123
+                keepers:
+                  - id: kpr_123
+                    definitionKey: crest_sovereign
+                    definitionVersion: 1
+                    name: Crest Sovereign
+                    currentName: Sovereign Current
+                    sector: CREST
+                    role: VANGUARD
+                    rarity: COMMON
+                    upgradeNodeKey: base
+                    level: 1
+                    acquiredDay: 1
+                    acquiredSource: STARTER
+                    acquiredAt: 2026-01-15T08:30:00Z
+        '401':
+          $ref: '#/components/responses/UnauthorizedRead'
+        '404':
+          description: No current Voyage exists.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestID'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                code: NO_ACTIVE_VOYAGE
+                message: No current voyage.
+                requestId: req_123
         '500':
           $ref: '#/components/responses/InternalErrorRead'
         '503':
@@ -965,38 +1028,42 @@ components:
             compatibility field name, it may temporarily identify a completed,
             failed, or abandoned Voyage until later progression clears it.
           example: voy_123
-    PlayerKeepersResponse:
+    KeeperUnlocksResponse:
       type: object
       additionalProperties: false
-      required: [keepers]
+      required: [unlocks]
       properties:
-        keepers:
+        unlocks:
           type: array
-          description: Player-owned Keeper instances, ordered by acquisition time.
+          description: Permanent Keeper archetype unlocks, ordered by unlock time.
           maxItems: 2147483647
           items:
-            $ref: '#/components/schemas/PlayerKeeperSummary'
-    PlayerKeeperSummary:
+            $ref: '#/components/schemas/KeeperUnlockSummary'
+    KeeperUnlockSummary:
       type: object
       additionalProperties: false
       required:
-        - id
         - definitionKey
+        - definitionVersion
         - name
         - currentName
         - sector
         - role
         - rarity
-        - level
+        - unlockSource
+        - unlockedAt
       properties:
-        id:
-          $ref: '#/components/schemas/PublicID'
         definitionKey:
           type: string
           minLength: 1
           maxLength: 128
           pattern: '^[a-z][a-z0-9_]*$'
-          description: Stable key of the Keeper definition backing this instance.
+          description: Stable key of the Keeper archetype that was originally unlocked.
+        definitionVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Exact immutable definition version that originally granted this unlock.
         name:
           $ref: '#/components/schemas/PublicName'
         currentName:
@@ -1007,11 +1074,95 @@ components:
           $ref: '#/components/schemas/ExtensibleToken'
         rarity:
           $ref: '#/components/schemas/ExtensibleToken'
+        unlockSource:
+          $ref: '#/components/schemas/ExtensibleToken'
+        unlockedAt:
+          type: string
+          format: date-time
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+          description: RFC 3339 UTC `Z` timestamp when the archetype was unlocked.
+    VoyageKeepersResponse:
+      type: object
+      additionalProperties: false
+      required: [voyageId, keepers]
+      properties:
+        voyageId:
+          $ref: '#/components/schemas/PublicID'
+        keepers:
+          type: array
+          description: Keeper instances owned by the current Voyage, ordered by acquisition.
+          maxItems: 2147483647
+          items:
+            $ref: '#/components/schemas/VoyageKeeperSummary'
+    VoyageKeeperSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - definitionKey
+        - definitionVersion
+        - name
+        - currentName
+        - sector
+        - role
+        - rarity
+        - upgradeNodeKey
+        - level
+        - acquiredDay
+        - acquiredSource
+        - acquiredAt
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicID'
+        definitionKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Stable key of the Keeper definition backing this instance.
+        definitionVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Exact immutable definition version backing this instance.
+        name:
+          $ref: '#/components/schemas/PublicName'
+        currentName:
+          $ref: '#/components/schemas/PublicName'
+        sector:
+          $ref: '#/components/schemas/ExtensibleToken'
+        role:
+          $ref: '#/components/schemas/ExtensibleToken'
+        rarity:
+          $ref: '#/components/schemas/ExtensibleToken'
+        upgradeNodeKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Authoritative upgrade node within the exact definition version.
         level:
           type: integer
           format: int32
           minimum: 1
           maximum: 100
+          description: Derived from normalized upgrade node depth plus one; never stored.
+        acquiredDay:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+        acquiredSource:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          description: Acquisition category that granted this instance.
+        acquiredAt:
+          type: string
+          format: date-time
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+          description: RFC 3339 UTC `Z` timestamp when the instance was acquired.
     VoyageResponse:
       type: object
       additionalProperties: false

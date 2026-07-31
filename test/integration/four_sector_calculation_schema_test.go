@@ -40,6 +40,7 @@ func TestFourSectorCalculationSchema(t *testing.T) {
 	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
 	applyMigration(t, ctx, conn, "000002_keepers_catalog.up.sql")
 	applyMigration(t, ctx, conn, "000005_four_sector_calculation.up.sql")
+	applyMigration(t, ctx, conn, "000007_keeper_definition_upgrade_nodes.up.sql")
 	seedValidDraft(t, ctx, conn)
 
 	var sectors int

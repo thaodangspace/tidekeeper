@@ -7,35 +7,38 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thaodangspace/tidekeepers-server/auth"
 	"github.com/thaodangspace/tidekeepers-server/player"
 )
 
-type playerKeeperReaderStub struct {
+type keeperUnlockReaderStub struct {
 	gotID   player.ID
-	keepers []player.Keeper
+	unlocks []player.KeeperUnlock
 	err     error
 }
 
-func (stub *playerKeeperReaderStub) ListKeepers(_ context.Context, playerID player.ID) ([]player.Keeper, error) {
+func (stub *keeperUnlockReaderStub) ListUnlocks(_ context.Context, playerID player.ID) ([]player.KeeperUnlock, error) {
 	stub.gotID = playerID
-	return stub.keepers, stub.err
+	return stub.unlocks, stub.err
 }
 
-func TestPlayerKeepersListReturnsAuthenticatedPlayerInventory(t *testing.T) {
-	reader := &playerKeeperReaderStub{keepers: []player.Keeper{{
-		PublicID:      "kpr_123",
-		DefinitionKey: "harbor_warden",
-		Name:          "Harbor Warden",
-		CurrentName:   "Harbor Current",
-		Sector:        "HARBOR",
-		Role:          "WARDEN",
-		Rarity:        "COMMON",
-		Level:         1,
+func TestKeeperUnlocksListReturnsAuthenticatedUnlocks(t *testing.T) {
+	unlockedAt := time.Date(2026, 1, 15, 8, 30, 0, 0, time.UTC)
+	reader := &keeperUnlockReaderStub{unlocks: []player.KeeperUnlock{{
+		DefinitionKey:     "crest_sovereign",
+		DefinitionVersion: 1,
+		Name:              "Crest Sovereign",
+		CurrentName:       "Sovereign Current",
+		Sector:            "CREST",
+		Role:              "VANGUARD",
+		Rarity:            "COMMON",
+		UnlockSource:      "LEGACY_MIGRATION",
+		UnlockedAt:        unlockedAt,
 	}}}
-	handler := NewPlayerKeepers(reader)
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keepers", nil)
+	handler := NewKeeperUnlocks(reader)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keeper-unlocks", nil)
 	request = request.WithContext(auth.WithPrincipal(request.Context(), auth.Principal{PlayerID: "internal-player-id"}))
 	response := httptest.NewRecorder()
 
@@ -51,10 +54,10 @@ func TestPlayerKeepersListReturnsAuthenticatedPlayerInventory(t *testing.T) {
 		t.Errorf("Cache-Control = %q, want private, no-store", response.Header().Get("Cache-Control"))
 	}
 	for _, want := range []string{
-		`"id":"kpr_123"`,
-		`"definitionKey":"harbor_warden"`,
-		`"currentName":"Harbor Current"`,
-		`"level":1`,
+		`"definitionKey":"crest_sovereign"`,
+		`"definitionVersion":1`,
+		`"unlockSource":"LEGACY_MIGRATION"`,
+		`"unlockedAt":"2026-01-15T08:30:00Z"`,
 	} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Errorf("body = %q, want %q", response.Body.String(), want)
@@ -62,9 +65,9 @@ func TestPlayerKeepersListReturnsAuthenticatedPlayerInventory(t *testing.T) {
 	}
 }
 
-func TestPlayerKeepersListReturnsEmptyArray(t *testing.T) {
-	handler := NewPlayerKeepers(&playerKeeperReaderStub{})
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keepers", nil)
+func TestKeeperUnlocksListReturnsEmptyArray(t *testing.T) {
+	handler := NewKeeperUnlocks(&keeperUnlockReaderStub{})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keeper-unlocks", nil)
 	request = request.WithContext(auth.WithPrincipal(request.Context(), auth.Principal{PlayerID: "internal-player-id"}))
 	response := httptest.NewRecorder()
 
@@ -73,16 +76,16 @@ func TestPlayerKeepersListReturnsEmptyArray(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if response.Body.String() != "{\"keepers\":[]}\n" {
-		t.Errorf("body = %q, want empty keepers array", response.Body.String())
+	if response.Body.String() != "{\"unlocks\":[]}\n" {
+		t.Errorf("body = %q, want empty unlocks array", response.Body.String())
 	}
 }
 
-func TestPlayerKeepersListRejectsMissingPrincipal(t *testing.T) {
-	handler := NewPlayerKeepers(&playerKeeperReaderStub{})
+func TestKeeperUnlocksListRejectsMissingPrincipal(t *testing.T) {
+	handler := NewKeeperUnlocks(&keeperUnlockReaderStub{})
 	response := httptest.NewRecorder()
 
-	handler.List(response, httptest.NewRequest(http.MethodGet, "/api/v1/me/keepers", nil))
+	handler.List(response, httptest.NewRequest(http.MethodGet, "/api/v1/me/keeper-unlocks", nil))
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
@@ -92,9 +95,9 @@ func TestPlayerKeepersListRejectsMissingPrincipal(t *testing.T) {
 	}
 }
 
-func TestPlayerKeepersListHidesReaderFailure(t *testing.T) {
-	handler := NewPlayerKeepers(&playerKeeperReaderStub{err: errors.New("database unavailable")})
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keepers", nil)
+func TestKeeperUnlocksListHidesReaderFailure(t *testing.T) {
+	handler := NewKeeperUnlocks(&keeperUnlockReaderStub{err: errors.New("database unavailable")})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/me/keeper-unlocks", nil)
 	request = request.WithContext(auth.WithPrincipal(request.Context(), auth.Principal{PlayerID: "internal-player-id"}))
 	response := httptest.NewRecorder()
 

@@ -18,20 +18,44 @@ SELECT
     (SELECT count(*)
      FROM basket_mapping_components AS c
      JOIN basket_mapping_versions AS m ON m.id = c.basket_mapping_version_id
-     WHERE m.content_version = $1)::bigint AS component_count
+     WHERE m.content_version = $1)::bigint AS component_count,
+    (SELECT count(*)
+     FROM keeper_definition_upgrade_nodes AS n
+     JOIN keeper_definition_versions AS k ON k.id = n.keeper_definition_version_id
+     WHERE k.content_version = $1)::bigint AS node_count
 `
 
 type CountCatalogReleaseRowsRow struct {
 	DefinitionCount int64 `json:"definition_count"`
 	MappingCount    int64 `json:"mapping_count"`
 	ComponentCount  int64 `json:"component_count"`
+	NodeCount       int64 `json:"node_count"`
 }
 
 func (q *Queries) CountCatalogReleaseRows(ctx context.Context, releaseVersion int64) (CountCatalogReleaseRowsRow, error) {
 	row := q.db.QueryRow(ctx, countCatalogReleaseRows, releaseVersion)
 	var i CountCatalogReleaseRowsRow
-	err := row.Scan(&i.DefinitionCount, &i.MappingCount, &i.ComponentCount)
+	err := row.Scan(
+		&i.DefinitionCount,
+		&i.MappingCount,
+		&i.ComponentCount,
+		&i.NodeCount,
+	)
 	return i, err
+}
+
+const countKeeperUpgradeNodesForRelease = `-- name: CountKeeperUpgradeNodesForRelease :one
+SELECT count(*)::bigint AS node_count
+FROM keeper_definition_upgrade_nodes AS n
+JOIN keeper_definition_versions AS k ON k.id = n.keeper_definition_version_id
+WHERE k.content_version = $1
+`
+
+func (q *Queries) CountKeeperUpgradeNodesForRelease(ctx context.Context, releaseVersion int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countKeeperUpgradeNodesForRelease, releaseVersion)
+	var node_count int64
+	err := row.Scan(&node_count)
+	return node_count, err
 }
 
 const createDraftContentRelease = `-- name: CreateDraftContentRelease :exec
@@ -167,6 +191,28 @@ func (q *Queries) InsertExpectedTurbulencePolicy(ctx context.Context, arg Insert
 		arg.StaticValueUnits,
 		arg.FloorUnits,
 		arg.RoundingMode,
+	)
+	return err
+}
+
+const insertKeeperDefinitionUpgradeNode = `-- name: InsertKeeperDefinitionUpgradeNode :exec
+INSERT INTO keeper_definition_upgrade_nodes (keeper_definition_version_id, node_key, depth, is_root)
+VALUES ($1, $2, $3, $4)
+`
+
+type InsertKeeperDefinitionUpgradeNodeParams struct {
+	KeeperDefinitionVersionID pgtype.UUID `json:"keeper_definition_version_id"`
+	NodeKey                   string      `json:"node_key"`
+	Depth                     int16       `json:"depth"`
+	IsRoot                    bool        `json:"is_root"`
+}
+
+func (q *Queries) InsertKeeperDefinitionUpgradeNode(ctx context.Context, arg InsertKeeperDefinitionUpgradeNodeParams) error {
+	_, err := q.db.Exec(ctx, insertKeeperDefinitionUpgradeNode,
+		arg.KeeperDefinitionVersionID,
+		arg.NodeKey,
+		arg.Depth,
+		arg.IsRoot,
 	)
 	return err
 }

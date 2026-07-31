@@ -25,6 +25,7 @@ type PublishResult struct {
 	DefinitionCount int64
 	MappingCount    int64
 	ComponentCount  int64
+	NodeCount       int64
 	Idempotent      bool
 }
 
@@ -72,6 +73,7 @@ func (p *Publisher) Publish(ctx context.Context, release CatalogRelease) (Publis
 			DefinitionCount: counts.DefinitionCount,
 			MappingCount:    counts.MappingCount,
 			ComponentCount:  counts.ComponentCount,
+			NodeCount:       counts.NodeCount,
 			Idempotent:      true,
 		}, nil
 	case !errors.Is(err, pgx.ErrNoRows):
@@ -193,6 +195,20 @@ func (p *Publisher) Publish(ctx context.Context, release CatalogRelease) (Publis
 		}); err != nil {
 			return PublishResult{}, fmt.Errorf("insert Keeper definition %q: %w", definition.Key, err)
 		}
+		nodes, err := parseUpgradeTree(definition.UpgradeTree)
+		if err != nil {
+			return PublishResult{}, fmt.Errorf("parse Keeper %q upgrade tree: %w", definition.Key, err)
+		}
+		for _, node := range nodes {
+			if err := queries.InsertKeeperDefinitionUpgradeNode(ctx, query.InsertKeeperDefinitionUpgradeNodeParams{
+				KeeperDefinitionVersionID: definitionID,
+				NodeKey:                   node.Key,
+				Depth:                     node.Depth,
+				IsRoot:                    node.IsRoot,
+			}); err != nil {
+				return PublishResult{}, fmt.Errorf("insert Keeper %q upgrade node %q: %w", definition.Key, node.Key, err)
+			}
+		}
 	}
 
 	if err := queries.PublishContentRelease(ctx, release.Version); err != nil {
@@ -211,6 +227,7 @@ func (p *Publisher) Publish(ctx context.Context, release CatalogRelease) (Publis
 		DefinitionCount: counts.DefinitionCount,
 		MappingCount:    counts.MappingCount,
 		ComponentCount:  counts.ComponentCount,
+		NodeCount:       counts.NodeCount,
 	}, nil
 }
 

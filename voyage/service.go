@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,13 +21,14 @@ import (
 )
 
 const (
-	idempotencyScopeCreate  = "voyage_create"
-	idempotencyScopeAbandon = "voyage_abandon"
-	defaultDefinitionKey    = "standard"
-	ledgerEntryHull         = "START_HULL"
-	ledgerEntrySupplies     = "START_SUPPLIES"
-	lifecycleEventCreated   = "CREATED"
-	lifecycleEventAbandoned = "ABANDONED"
+	idempotencyScopeCreate   = "voyage_create"
+	idempotencyScopeAbandon  = "voyage_abandon"
+	defaultDefinitionKey     = "standard"
+	ledgerEntryHull          = "START_HULL"
+	ledgerEntrySupplies      = "START_SUPPLIES"
+	lifecycleEventCreated    = "CREATED"
+	lifecycleEventAbandoned  = "ABANDONED"
+	acquisitionSourceStarter = "STARTER"
 )
 
 type Service struct {
@@ -157,9 +159,11 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 		if err := q.InsertKeeperInstance(ctx, query.InsertKeeperInstanceParams{
 			ID:                        kid,
 			PublicID:                  kprPublicID,
-			PlayerID:                  pid,
-			KeeperDefinitionVersionID: sk.KeeperDefinitionVersionID,
 			VoyageID:                  voyageID,
+			KeeperDefinitionVersionID: sk.KeeperDefinitionVersionID,
+			UpgradeNodeKey:            sk.RootUpgradeNodeKey,
+			AcquiredDay:               1,
+			AcquiredSource:            acquisitionSourceStarter,
 		}); err != nil {
 			return nil, fmt.Errorf("%w: insert keeper instance %d: %w", ErrInternal, i, err)
 		}
@@ -507,7 +511,7 @@ func insertLedgerEntry(ctx context.Context, q *query.Queries, voyageID pgtype.UU
 		BalanceAfter: amount,
 		SourceType:   "VOYAGE_START",
 		SourceID:     voyagePublicID,
-		ReasonKey:    "voyage.create." + entryType,
+		ReasonKey:    "voyage.create." + strings.ToLower(entryType),
 	}); err != nil {
 		return fmt.Errorf("%w: insert %s entry: %w", ErrInternal, entryType, err)
 	}
@@ -627,27 +631,31 @@ func newUUID() (pgtype.UUID, error) {
 }
 
 func newVoyagePublicID() (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("generate voyage public ID: %w", err)
-	}
-	return "voy_" + base64.RawURLEncoding.EncodeToString(bytes), nil
+	return newPrefixedPublicID("voy_")
 }
 
 func newKeeperPublicID() (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("generate keeper public ID: %w", err)
-	}
-	return "kpr_" + base64.RawURLEncoding.EncodeToString(bytes), nil
+	return newPrefixedPublicID("kpr_")
 }
 
 func newEventPublicID() (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("generate event public ID: %w", err)
+	return newPrefixedPublicID("evt_")
+}
+
+// newPrefixedPublicID returns a random public ID whose first character after the
+// prefix is always alphanumeric, satisfying the public ID checks.
+func newPrefixedPublicID(prefix string) (string, error) {
+	for {
+		bytes := make([]byte, 12)
+		if _, err := rand.Read(bytes); err != nil {
+			return "", fmt.Errorf("generate %s public ID: %w", prefix, err)
+		}
+		id := prefix + base64.RawURLEncoding.EncodeToString(bytes)
+		if c := id[len(prefix)]; c == '-' || c == '_' {
+			continue
+		}
+		return id, nil
 	}
-	return "evt_" + base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
 func nowDate() time.Time {

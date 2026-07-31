@@ -80,6 +80,15 @@ type apiError struct {
 	RequestID string `json:"requestId"`
 }
 
+func writeAuthenticationRequired(writer http.ResponseWriter, ctx context.Context) {
+	writer.Header().Set("Cache-Control", "private, no-store")
+	response.JSON(writer, http.StatusUnauthorized, apiError{
+		Code:      "AUTH_REQUIRED",
+		Message:   "Authentication is required.",
+		RequestID: apiMiddleware.RequestIDFromContext(ctx),
+	})
+}
+
 func decodeCredentials(writer http.ResponseWriter, request *http.Request) (credentialsRequest, bool) {
 	request.Body = http.MaxBytesReader(writer, request.Body, maxAuthRequestBytes)
 	defer request.Body.Close()
