@@ -110,6 +110,14 @@ type IdempotencyKey struct {
 	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
 }
 
+type KeeperDefinitionUpgradeNode struct {
+	KeeperDefinitionVersionID pgtype.UUID        `json:"keeper_definition_version_id"`
+	NodeKey                   string             `json:"node_key"`
+	Depth                     int16              `json:"depth"`
+	IsRoot                    bool               `json:"is_root"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+}
+
 type KeeperDefinitionVersion struct {
 	ID                     pgtype.UUID        `json:"id"`
 	KeeperKey              string             `json:"keeper_key"`
@@ -132,11 +140,14 @@ type KeeperDefinitionVersion struct {
 type KeeperInstance struct {
 	ID                        pgtype.UUID        `json:"id"`
 	PublicID                  string             `json:"public_id"`
-	PlayerID                  pgtype.UUID        `json:"player_id"`
 	KeeperDefinitionVersionID pgtype.UUID        `json:"keeper_definition_version_id"`
-	Level                     int16              `json:"level"`
 	AcquiredAt                pgtype.Timestamptz `json:"acquired_at"`
 	VoyageID                  pgtype.UUID        `json:"voyage_id"`
+	UpgradeNodeKey            string             `json:"upgrade_node_key"`
+	AcquiredDay               int16              `json:"acquired_day"`
+	AcquiredSource            string             `json:"acquired_source"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 }
 
 type KeeperSectorResult struct {
@@ -218,6 +229,16 @@ type PlayerDailyState struct {
 	PendingRewardCount int32              `json:"pending_reward_count"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PlayerKeeperUnlock struct {
+	PlayerID                    pgtype.UUID        `json:"player_id"`
+	KeeperKey                   string             `json:"keeper_key"`
+	UnlockedDefinitionVersionID pgtype.UUID        `json:"unlocked_definition_version_id"`
+	UnlockSource                string             `json:"unlock_source"`
+	UnlockedAt                  pgtype.Timestamptz `json:"unlocked_at"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Sector struct {

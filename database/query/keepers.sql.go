@@ -11,52 +11,55 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const listKeeperInstancesForPlayer = `-- name: ListKeeperInstancesForPlayer :many
+const listPlayerKeeperUnlocks = `-- name: ListPlayerKeeperUnlocks :many
 SELECT
-    i.public_id AS keeper_public_id,
-    d.keeper_key AS definition_key,
+    u.keeper_key,
+    d.content_version AS definition_version,
+    u.unlock_source,
+    u.unlocked_at,
     d.name,
     d.current_name,
     d.sector_key,
     d.role_key,
-    d.rarity_key,
-    i.level
-FROM keeper_instances AS i
+    d.rarity_key
+FROM player_keeper_unlocks AS u
 JOIN keeper_definition_versions AS d
-    ON d.id = i.keeper_definition_version_id
-WHERE i.player_id = $1
-ORDER BY i.acquired_at ASC, i.id ASC
+    ON d.id = u.unlocked_definition_version_id
+WHERE u.player_id = $1
+ORDER BY u.unlocked_at ASC, u.keeper_key ASC
 `
 
-type ListKeeperInstancesForPlayerRow struct {
-	KeeperPublicID string `json:"keeper_public_id"`
-	DefinitionKey  string `json:"definition_key"`
-	Name           string `json:"name"`
-	CurrentName    string `json:"current_name"`
-	SectorKey      string `json:"sector_key"`
-	RoleKey        string `json:"role_key"`
-	RarityKey      string `json:"rarity_key"`
-	Level          int16  `json:"level"`
+type ListPlayerKeeperUnlocksRow struct {
+	KeeperKey         string             `json:"keeper_key"`
+	DefinitionVersion int64              `json:"definition_version"`
+	UnlockSource      string             `json:"unlock_source"`
+	UnlockedAt        pgtype.Timestamptz `json:"unlocked_at"`
+	Name              string             `json:"name"`
+	CurrentName       string             `json:"current_name"`
+	SectorKey         string             `json:"sector_key"`
+	RoleKey           string             `json:"role_key"`
+	RarityKey         string             `json:"rarity_key"`
 }
 
-func (q *Queries) ListKeeperInstancesForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListKeeperInstancesForPlayerRow, error) {
-	rows, err := q.db.Query(ctx, listKeeperInstancesForPlayer, playerID)
+func (q *Queries) ListPlayerKeeperUnlocks(ctx context.Context, playerID pgtype.UUID) ([]ListPlayerKeeperUnlocksRow, error) {
+	rows, err := q.db.Query(ctx, listPlayerKeeperUnlocks, playerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListKeeperInstancesForPlayerRow{}
+	items := []ListPlayerKeeperUnlocksRow{}
 	for rows.Next() {
-		var i ListKeeperInstancesForPlayerRow
+		var i ListPlayerKeeperUnlocksRow
 		if err := rows.Scan(
-			&i.KeeperPublicID,
-			&i.DefinitionKey,
+			&i.KeeperKey,
+			&i.DefinitionVersion,
+			&i.UnlockSource,
+			&i.UnlockedAt,
 			&i.Name,
 			&i.CurrentName,
 			&i.SectorKey,
 			&i.RoleKey,
 			&i.RarityKey,
-			&i.Level,
 		); err != nil {
 			return nil, err
 		}

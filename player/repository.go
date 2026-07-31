@@ -40,32 +40,34 @@ func (r *Repository) GetMe(ctx context.Context, playerID ID) (Me, error) {
 	}, nil
 }
 
-// ListKeepers returns the player's inventory paired with immutable definition metadata.
-func (r *Repository) ListKeepers(ctx context.Context, playerID ID) ([]Keeper, error) {
+// ListUnlocks returns the player's permanent archetype unlocks paired with the
+// immutable definition metadata of the version that originally granted them.
+func (r *Repository) ListUnlocks(ctx context.Context, playerID ID) ([]KeeperUnlock, error) {
 	databaseID, err := parseDatabaseID(playerID)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := query.New(r.pool).ListKeeperInstancesForPlayer(ctx, databaseID)
+	rows, err := query.New(r.pool).ListPlayerKeeperUnlocks(ctx, databaseID)
 	if err != nil {
-		return nil, fmt.Errorf("list player keepers: %w", err)
+		return nil, fmt.Errorf("list player keeper unlocks: %w", err)
 	}
 
-	keepers := make([]Keeper, len(rows))
+	unlocks := make([]KeeperUnlock, len(rows))
 	for index, row := range rows {
-		keepers[index] = Keeper{
-			PublicID:      row.KeeperPublicID,
-			DefinitionKey: row.DefinitionKey,
-			Name:          row.Name,
-			CurrentName:   row.CurrentName,
-			Sector:        row.SectorKey,
-			Role:          row.RoleKey,
-			Rarity:        row.RarityKey,
-			Level:         int(row.Level),
+		unlocks[index] = KeeperUnlock{
+			DefinitionKey:     row.KeeperKey,
+			DefinitionVersion: row.DefinitionVersion,
+			Name:              row.Name,
+			CurrentName:       row.CurrentName,
+			Sector:            row.SectorKey,
+			Role:              row.RoleKey,
+			Rarity:            row.RarityKey,
+			UnlockSource:      row.UnlockSource,
+			UnlockedAt:        row.UnlockedAt.Time.UTC(),
 		}
 	}
-	return keepers, nil
+	return unlocks, nil
 }
 
 func parseDatabaseID(playerID ID) (pgtype.UUID, error) {

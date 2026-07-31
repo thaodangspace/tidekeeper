@@ -1,6 +1,13 @@
 DROP TRIGGER IF EXISTS voyages_terminal_immutability_trigger ON voyages;
 DROP FUNCTION IF EXISTS voyage_guard_terminal_immutability();
 
+-- Remove the transitional Keeper Voyage ownership in dependency-safe order,
+-- returning keeper_instances to its exact post-000004 shape.
+DROP INDEX IF EXISTS keeper_instances_voyage_idx;
+ALTER TABLE keeper_instances
+    DROP CONSTRAINT IF EXISTS keeper_instances_voyage_fk,
+    DROP COLUMN IF EXISTS voyage_id;
+
 DROP TABLE IF EXISTS voyage_lifecycle_events;
 DROP TABLE IF EXISTS voyage_ledger_entries;
 

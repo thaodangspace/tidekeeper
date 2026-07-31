@@ -32,6 +32,7 @@ func TestSectorBenchmarkRepositoryIsIdempotentAndConflictSafe(t *testing.T) {
 	applyMigration(t, ctx, admin, "000001_foundation.up.sql")
 	applyMigration(t, ctx, admin, "000002_keepers_catalog.up.sql")
 	applyMigration(t, ctx, admin, "000005_four_sector_calculation.up.sql")
+	applyMigration(t, ctx, admin, "000007_keeper_definition_upgrade_nodes.up.sql")
 	seedValidDraft(t, ctx, admin)
 	mustExec(t, ctx, admin, `INSERT INTO sector_definition_versions (id, sector_key, content_version, benchmark_method, minimum_eligible_baskets, relative_scale_units, relative_blend_weight_units, rank_blend_weight_units, score_cap_units) VALUES ($1, 'CREST', 1, 'EQUAL_WEIGHT', 2, 500000, 700000, 300000, 1000000)`, repositorySectorDefinitionID)
 	mustExec(t, ctx, admin, `INSERT INTO daily_tides (id, day_key, sequence_number, phase, lock_at, settle_after, content_version) VALUES ($1, '2026-08-02', 3, 'DATA_PENDING', '2026-08-02T00:00:00Z', '2026-08-02T00:01:00Z', 1)`, repositoryDailyTideID)

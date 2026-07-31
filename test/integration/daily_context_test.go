@@ -47,6 +47,7 @@ func TestGetCurrentDailyContextSuccess(t *testing.T) {
 	mustExec(t, ctx, conn, "SET search_path TO "+schema)
 
 	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
+	applyMigration(t, ctx, conn, "000003_auth_credentials.up.sql")
 
 	mustExec(t, ctx, conn,
 		"INSERT INTO accounts (id, email, password_hash) VALUES ($1, 'a@a.test', 'hash-a')",
@@ -140,6 +141,7 @@ func TestGetCurrentDailyContextNoActiveVoyage(t *testing.T) {
 	mustExec(t, ctx, conn, "SET search_path TO "+schema)
 
 	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
+	applyMigration(t, ctx, conn, "000003_auth_credentials.up.sql")
 
 	mustExec(t, ctx, conn,
 		"INSERT INTO accounts (id, email, password_hash) VALUES ($1, 'c@c.test', 'hash-c')",
@@ -176,6 +178,7 @@ func TestGetCurrentDailyContextThroughRepository(t *testing.T) {
 	mustExec(t, ctx, conn, "SET search_path TO "+schema)
 
 	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
+	applyMigration(t, ctx, conn, "000003_auth_credentials.up.sql")
 
 	mustExec(t, ctx, conn,
 		"INSERT INTO accounts (id, email, password_hash) VALUES ($1, 'f@f.test', 'hash-f')",

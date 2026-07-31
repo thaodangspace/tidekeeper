@@ -43,6 +43,7 @@ func TestKeepersCatalogSchema(t *testing.T) {
 
 	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
 	applyMigration(t, ctx, conn, "000002_keepers_catalog.up.sql")
+	applyMigration(t, ctx, conn, "000007_keeper_definition_upgrade_nodes.up.sql")
 
 	seedValidDraft(t, ctx, conn)
 
@@ -112,6 +113,37 @@ func TestKeepersCatalogSchema(t *testing.T) {
 		"UPDATE market_assets SET symbol = 'BTX' WHERE id = $1", assetOneID,
 	)
 
+	var nodeRows int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM keeper_definition_upgrade_nodes WHERE keeper_definition_version_id = $1", keeperOneID).Scan(&nodeRows); err != nil {
+		t.Fatalf("count seeded upgrade nodes: %v", err)
+	}
+	if nodeRows != 3 {
+		t.Fatalf("seeded upgrade node count = %d, want 3", nodeRows)
+	}
+
+	expectExecError(t, ctx, conn,
+		"UPDATE keeper_definition_upgrade_nodes SET depth = 5 WHERE keeper_definition_version_id = $1 AND node_key = 'deep_crown'",
+		keeperOneID,
+	)
+	expectExecError(t, ctx, conn,
+		"UPDATE keeper_definition_upgrade_nodes SET node_key = 'relabeled' WHERE keeper_definition_version_id = $1 AND node_key = 'base'",
+		keeperOneID,
+	)
+	expectExecError(t, ctx, conn,
+		"DELETE FROM keeper_definition_upgrade_nodes WHERE keeper_definition_version_id = $1 AND node_key = 'base'",
+		keeperOneID,
+	)
+	expectExecError(t, ctx, conn,
+		"INSERT INTO keeper_definition_upgrade_nodes (keeper_definition_version_id, node_key, depth, is_root) VALUES ($1, 'new_node', 1, false)",
+		keeperOneID,
+	)
+	expectExecError(t, ctx, conn,
+		"INSERT INTO keeper_definition_upgrade_nodes (keeper_definition_version_id, node_key, depth, is_root) VALUES ($1, 'second_root', 0, true)",
+		keeperOneID,
+	)
+
+	applyMigration(t, ctx, conn, "000007_keeper_definition_upgrade_nodes.down.sql")
+
 	applyMigration(t, ctx, conn, "000002_keepers_catalog.down.sql")
 	var catalogTableExists bool
 	if err := conn.QueryRow(ctx, "SELECT to_regclass(current_schema() || '.content_releases') IS NOT NULL").Scan(&catalogTableExists); err != nil {
@@ -154,6 +186,10 @@ func seedValidDraft(t *testing.T, ctx context.Context, conn *pgx.Conn) {
 		) VALUES ($1, 'crest_sovereign', 1, 'Crest Sovereign', 'sovereign_current', 'Sovereign Current',
 			'CREST', 'VANGUARD', 'COMMON', 'LOW_TO_MEDIUM', 'TEST_RULE', '{}'::jsonb, '{}'::jsonb, $2)`,
 		keeperOneID, mappingOneID,
+	)
+	mustExec(t, ctx, tx,
+		"INSERT INTO keeper_definition_upgrade_nodes (keeper_definition_version_id, node_key, depth, is_root) VALUES ($1, 'base', 0, true), ($1, 'deep_crown', 1, false), ($1, 'rising_throne', 1, false)",
+		keeperOneID,
 	)
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatalf("commit valid catalog transaction: %v", err)
