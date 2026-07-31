@@ -527,9 +527,9 @@ func (q *Queries) GetVoyageDefinitionStarterKeepers(ctx context.Context, voyageD
 }
 
 const insertKeeperInstance = `-- name: InsertKeeperInstance :exec
-INSERT INTO keeper_instances (id, public_id, player_id, keeper_definition_version_id, level)
+INSERT INTO keeper_instances (id, public_id, player_id, keeper_definition_version_id, level, voyage_id)
 VALUES ($1, $2, $3,
-        $4, 1)
+        $4, 1, $5)
 `
 
 type InsertKeeperInstanceParams struct {
@@ -537,6 +537,7 @@ type InsertKeeperInstanceParams struct {
 	PublicID                  string      `json:"public_id"`
 	PlayerID                  pgtype.UUID `json:"player_id"`
 	KeeperDefinitionVersionID pgtype.UUID `json:"keeper_definition_version_id"`
+	VoyageID                  pgtype.UUID `json:"voyage_id"`
 }
 
 func (q *Queries) InsertKeeperInstance(ctx context.Context, arg InsertKeeperInstanceParams) error {
@@ -545,6 +546,7 @@ func (q *Queries) InsertKeeperInstance(ctx context.Context, arg InsertKeeperInst
 		arg.PublicID,
 		arg.PlayerID,
 		arg.KeeperDefinitionVersionID,
+		arg.VoyageID,
 	)
 	return err
 }
@@ -766,6 +768,56 @@ func (q *Queries) LockPlayerRow(ctx context.Context, id pgtype.UUID) (Player, er
 		&i.Locale,
 		&i.Timezone,
 		&i.CurrentVoyageID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const lockVoyageRowForUpdate = `-- name: LockVoyageRowForUpdate :one
+SELECT id, public_id, player_id, status, voyage_definition_version_id,
+       current_day_number, fund_health, max_fund_health, capital, score,
+       row_version, started_at, completed_at, created_at, updated_at
+FROM voyages
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockVoyageRowForUpdateRow struct {
+	ID                        pgtype.UUID        `json:"id"`
+	PublicID                  string             `json:"public_id"`
+	PlayerID                  pgtype.UUID        `json:"player_id"`
+	Status                    string             `json:"status"`
+	VoyageDefinitionVersionID pgtype.UUID        `json:"voyage_definition_version_id"`
+	CurrentDayNumber          int16              `json:"current_day_number"`
+	FundHealth                int32              `json:"fund_health"`
+	MaxFundHealth             int32              `json:"max_fund_health"`
+	Capital                   int32              `json:"capital"`
+	Score                     pgtype.Numeric     `json:"score"`
+	RowVersion                int64              `json:"row_version"`
+	StartedAt                 pgtype.Timestamptz `json:"started_at"`
+	CompletedAt               pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) LockVoyageRowForUpdate(ctx context.Context, id pgtype.UUID) (LockVoyageRowForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, lockVoyageRowForUpdate, id)
+	var i LockVoyageRowForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.PlayerID,
+		&i.Status,
+		&i.VoyageDefinitionVersionID,
+		&i.CurrentDayNumber,
+		&i.FundHealth,
+		&i.MaxFundHealth,
+		&i.Capital,
+		&i.Score,
+		&i.RowVersion,
+		&i.StartedAt,
+		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

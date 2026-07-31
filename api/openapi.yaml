@@ -238,8 +238,9 @@ paths:
       tags: [Voyage]
       summary: Get the current Voyage
       description: |
-        Returns the Voyage referenced by the authenticated player's current
-        pointer, including terminal state when applicable.
+        Returns the authenticated player's currently active Voyage. Responds
+        with `404` / `NO_ACTIVE_VOYAGE` when no active Voyage exists, including
+        after the last Voyage has reached a terminal state.
       security:
         - sessionCookie: []
       responses:

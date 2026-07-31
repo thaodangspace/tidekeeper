@@ -58,9 +58,9 @@ WHERE id = sqlc.arg(id)
 FOR UPDATE;
 
 -- name: InsertKeeperInstance :exec
-INSERT INTO keeper_instances (id, public_id, player_id, keeper_definition_version_id, level)
+INSERT INTO keeper_instances (id, public_id, player_id, keeper_definition_version_id, level, voyage_id)
 VALUES (sqlc.arg(id), sqlc.arg(public_id), sqlc.arg(player_id),
-        sqlc.arg(keeper_definition_version_id), 1);
+        sqlc.arg(keeper_definition_version_id), 1, sqlc.arg(voyage_id));
 
 -- name: InsertPlayerDailyStateWithView :exec
 WITH inserted_state AS (
@@ -117,6 +117,14 @@ SET state = 'COMPLETED',
 WHERE player_id = sqlc.arg(player_id)
   AND scope = sqlc.arg(scope)
   AND key = sqlc.arg(key);
+
+-- name: LockVoyageRowForUpdate :one
+SELECT id, public_id, player_id, status, voyage_definition_version_id,
+       current_day_number, fund_health, max_fund_health, capital, score,
+       row_version, started_at, completed_at, created_at, updated_at
+FROM voyages
+WHERE id = sqlc.arg(id)
+FOR UPDATE;
 
 -- name: GetVoyageByPublicID :one
 SELECT id, public_id, player_id, status, voyage_definition_version_id,

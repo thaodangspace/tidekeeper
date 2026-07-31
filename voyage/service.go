@@ -159,6 +159,7 @@ func (s *Service) Create(ctx context.Context, playerID, idempotencyKey string) (
 			PublicID:                  kprPublicID,
 			PlayerID:                  pid,
 			KeeperDefinitionVersionID: sk.KeeperDefinitionVersionID,
+			VoyageID:                  voyageID,
 		}); err != nil {
 			return nil, fmt.Errorf("%w: insert keeper instance %d: %w", ErrInternal, i, err)
 		}
@@ -320,20 +321,25 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 		return nil, fmt.Errorf("%w: %w", ErrServiceUnavailable, err)
 	}
 
-	def, err := q.GetVoyageDefinitionByID(ctx, voyageRow.VoyageDefinitionVersionID)
+	lockedRow, err := q.LockVoyageRowForUpdate(ctx, voyageRow.ID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: lock voyage: %w", ErrServiceUnavailable, err)
+	}
+
+	def, err := q.GetVoyageDefinitionByID(ctx, lockedRow.VoyageDefinitionVersionID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: get definition: %w", ErrInternal, err)
 	}
 
-	if voyageRow.Status == string(StatusAbandoned) {
-		resp := makeResponse(voyageRow.PublicID, voyageRow.Status, voyageRow.CurrentDayNumber, voyageRow.FundHealth, voyageRow.MaxFundHealth, voyageRow.Capital, voyageRow.Score, voyageRow.RowVersion, voyageRow.StartedAt, voyageRow.CompletedAt, def)
+	if lockedRow.Status == string(StatusAbandoned) {
+		resp := makeResponse(lockedRow.PublicID, lockedRow.Status, lockedRow.CurrentDayNumber, lockedRow.FundHealth, lockedRow.MaxFundHealth, lockedRow.Capital, lockedRow.Score, lockedRow.RowVersion, lockedRow.StartedAt, lockedRow.CompletedAt, def)
 		respJSON, err := json.Marshal(resp)
 		if err != nil {
 			return nil, fmt.Errorf("%w: marshal response: %w", ErrInternal, err)
 		}
 		status := int16(200)
 		if err := q.CompleteIdempotencyKey(ctx, query.CompleteIdempotencyKeyParams{
-			ResultVoyageID: voyageRow.ID,
+			ResultVoyageID: lockedRow.ID,
 			ResponseStatus: &status,
 			ResponseJson:   respJSON,
 			PlayerID:       pid,
@@ -348,15 +354,15 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 		return resp, nil
 	}
 
-	if voyageRow.Status != string(StatusActive) {
+	if lockedRow.Status != string(StatusActive) {
 		return nil, ErrVoyageTerminal
 	}
 
 	updated, err := q.UpdateVoyageStatus(ctx, query.UpdateVoyageStatusParams{
 		Status:       string(StatusAbandoned),
 		SetCompleted: true,
-		ID:           voyageRow.ID,
-		RowVersion:   voyageRow.RowVersion,
+		ID:           lockedRow.ID,
+		RowVersion:   lockedRow.RowVersion,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: update voyage status: %w", ErrInternal, err)
@@ -373,7 +379,7 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 	if err := q.InsertVoyageLifecycleEvent(ctx, query.InsertVoyageLifecycleEventParams{
 		ID:              eventID,
 		PublicID:        eventPublicID,
-		VoyageID:        voyageRow.ID,
+		VoyageID:        lockedRow.ID,
 		EventType:       lifecycleEventAbandoned,
 		ResultingStatus: string(StatusAbandoned),
 	}); err != nil {
@@ -387,7 +393,7 @@ func (s *Service) Abandon(ctx context.Context, playerID, voyageID, idempotencyKe
 	}
 	status := int16(200)
 	if err := q.CompleteIdempotencyKey(ctx, query.CompleteIdempotencyKeyParams{
-		ResultVoyageID: voyageRow.ID,
+		ResultVoyageID: lockedRow.ID,
 		ResponseStatus: &status,
 		ResponseJson:   respJSON,
 		PlayerID:       pid,

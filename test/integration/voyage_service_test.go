@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -66,9 +67,17 @@ func TestVoyageCreateIdempotent(t *testing.T) {
 		t.Errorf("replayed status = %q, want ACTIVE", resp2.Status)
 	}
 
-	_, err = svc.Create(ctx, voyagePlrOneID, "key-idem-create")
-	if !errors.Is(err, voyage.ErrIdempotencyKeyReused) {
-		t.Fatalf("third Create err = %v, want ErrIdempotencyKeyReused", err)
+	resp3, err := svc.Create(ctx, voyagePlrOneID, "key-idem-create")
+	if err != nil {
+		t.Fatalf("third Create (same key, same request): %v", err)
+	}
+	if resp3.PublicID != resp1.PublicID {
+		t.Errorf("third replay ID = %q, want %q", resp3.PublicID, resp1.PublicID)
+	}
+
+	_, err = svc.Create(ctx, voyagePlrOneID, "different-key")
+	if !errors.Is(err, voyage.ErrActiveVoyageExists) {
+		t.Fatalf("Create with different key err = %v, want ErrActiveVoyageExists", err)
 	}
 }
 
@@ -285,6 +294,126 @@ func TestVoyageAbandonIdempotencyKeyScopedToVoyageID(t *testing.T) {
 	_, err = svc.Abandon(ctx, voyagePlrOneID, v2.PublicID, "key-scope-abandon")
 	if !errors.Is(err, voyage.ErrIdempotencyKeyReused) {
 		t.Fatalf("abandon v2 with same key err = %v, want ErrIdempotencyKeyReused", err)
+	}
+}
+
+func TestVoyageConcurrentCreateOnlyOneSucceeds(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := databaseURL(t)
+
+	_, pool, cleanup := setupVoyageTest(t, ctx, databaseURL, "voyage_concurrent")
+	defer cleanup()
+
+	svc := voyage.NewService(pool)
+
+	const goroutines = 5
+	var (
+		mu     sync.Mutex
+		wg     sync.WaitGroup
+		winner string
+		count  int
+	)
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		key := "key-concurrent-" + string(rune('a'+i))
+		go func(k string) {
+			defer wg.Done()
+			resp, err := svc.Create(ctx, voyagePlrOneID, k)
+			mu.Lock()
+			if err == nil {
+				count++
+				winner = resp.PublicID
+			}
+			mu.Unlock()
+		}(key)
+	}
+	wg.Wait()
+
+	if count != 1 {
+		t.Fatalf("exactly 1 creation should succeed, got %d", count)
+	}
+
+	current, err := svc.GetCurrent(ctx, voyagePlrOneID)
+	if err != nil {
+		t.Fatalf("GetCurrent: %v", err)
+	}
+	if current.PublicID != winner {
+		t.Errorf("current voyage = %q, want winning voyage %q", current.PublicID, winner)
+	}
+}
+
+func TestVoyageAtomicRollbackOnFailure(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := databaseURL(t)
+
+	conn, pool, cleanup := setupVoyageTest(t, ctx, databaseURL, "voyage_rollback")
+	defer cleanup()
+
+	svc := voyage.NewService(pool)
+
+	resp, err := svc.Create(ctx, voyagePlrOneID, "key-rollback-ok")
+	if err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	var firstVoyageID pgtype.UUID
+	if err := firstVoyageID.Scan(resp.PublicID); err != nil {
+		t.Fatalf("parse voyage public ID: %v", err)
+	}
+
+	_, err = svc.Create(ctx, voyagePlrOneID, "key-rollback-fail")
+	if !errors.Is(err, voyage.ErrActiveVoyageExists) {
+		t.Fatalf("second Create err = %v, want ErrActiveVoyageExists", err)
+	}
+
+	var counts struct {
+		voyages       int
+		ledgerEntries int
+		keeperInst    int
+		lifecycleEvts int
+		states        int
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM voyages WHERE player_id = $1", voyagePlrOneID).Scan(&counts.voyages); err != nil {
+		t.Fatalf("count voyages: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM voyage_ledger_entries WHERE voyage_id = $1", firstVoyageID).Scan(&counts.ledgerEntries); err != nil {
+		t.Fatalf("count ledger entries: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM keeper_instances WHERE player_id = $1", voyagePlrOneID).Scan(&counts.keeperInst); err != nil {
+		t.Fatalf("count keeper instances: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM voyage_lifecycle_events WHERE voyage_id = $1", firstVoyageID).Scan(&counts.lifecycleEvts); err != nil {
+		t.Fatalf("count lifecycle events: %v", err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM player_daily_states WHERE player_id = $1", voyagePlrOneID).Scan(&counts.states); err != nil {
+		t.Fatalf("count daily states: %v", err)
+	}
+
+	t.Logf("rollback check: voyages=%d ledger=%d keepers=%d events=%d states=%d",
+		counts.voyages, counts.ledgerEntries, counts.keeperInst, counts.lifecycleEvts, counts.states)
+
+	if counts.voyages != 1 {
+		t.Errorf("voyages count = %d, want 1", counts.voyages)
+	}
+	if counts.ledgerEntries != 2 {
+		t.Errorf("ledger entries count = %d, want 2", counts.ledgerEntries)
+	}
+	if counts.keeperInst != 1 {
+		t.Errorf("keeper instances count = %d, want 1", counts.keeperInst)
+	}
+	if counts.lifecycleEvts != 1 {
+		t.Errorf("lifecycle events count = %d, want 1", counts.lifecycleEvts)
+	}
+	if counts.states != 1 {
+		t.Errorf("daily states count = %d, want 1", counts.states)
+	}
+
+	rows, err := query.New(conn).ListLifecycleEventsForVoyage(ctx, firstVoyageID)
+	if err != nil {
+		t.Fatalf("list lifecycle events: %v", err)
+	}
+	if len(rows) != 1 || rows[0].EventType != "CREATED" {
+		t.Errorf("lifecycle events = %+v, want [CREATED]", rows)
 	}
 }
 

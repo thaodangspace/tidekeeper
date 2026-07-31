@@ -136,6 +136,7 @@ type KeeperInstance struct {
 	KeeperDefinitionVersionID pgtype.UUID        `json:"keeper_definition_version_id"`
 	Level                     int16              `json:"level"`
 	AcquiredAt                pgtype.Timestamptz `json:"acquired_at"`
+	VoyageID                  pgtype.UUID        `json:"voyage_id"`
 }
 
 type KeeperSectorResult struct {

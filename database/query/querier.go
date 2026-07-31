@@ -66,6 +66,7 @@ type Querier interface {
 	ListTargetBasketCalculationMappingsForContent(ctx context.Context, contentVersion int64) ([]ListTargetBasketCalculationMappingsForContentRow, error)
 	ListTargetSectorBenchmarkReadiness(ctx context.Context, arg ListTargetSectorBenchmarkReadinessParams) ([]ListTargetSectorBenchmarkReadinessRow, error)
 	LockPlayerRow(ctx context.Context, id pgtype.UUID) (Player, error)
+	LockVoyageRowForUpdate(ctx context.Context, id pgtype.UUID) (LockVoyageRowForUpdateRow, error)
 	PublishContentRelease(ctx context.Context, version int64) error
 	UpdatePlayerCurrentVoyage(ctx context.Context, arg UpdatePlayerCurrentVoyageParams) error
 	UpdateVoyageStatus(ctx context.Context, arg UpdateVoyageStatusParams) (UpdateVoyageStatusRow, error)

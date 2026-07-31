@@ -175,11 +175,37 @@ CREATE TRIGGER voyage_definition_versions_published_immutable_trigger
     BEFORE UPDATE OR DELETE ON voyage_definition_versions
     FOR EACH ROW EXECUTE FUNCTION voyage_definition_guard_published_immutability();
 
--- ── Standard MVP definition ────────────────────────────────────────────────
--- Published with starter Hull=100, Supplies=10, 3 fleet slots, no starter
--- Keepers (keeper definitions are not yet seeded). The initial shop is empty;
--- the shop is populated by content publication as Keeper definitions are added.
---
+-- ── Seed MVP catalog content (market assets, basket mapping, keeper) ────────
+
+INSERT INTO content_releases (version, status, checksum)
+VALUES (1, 'PUBLISHED', decode('0101010101010101010101010101010101010101010101010101010101010101', 'hex'));
+
+INSERT INTO market_assets (id, asset_key, symbol)
+VALUES ('00000000-0000-0000-0000-000000000001', 'bitcoin', 'BTC'),
+       ('00000000-0000-0000-0000-000000000002', 'ethereum', 'ETH'),
+       ('00000000-0000-0000-0000-000000000003', 'ethena_usde', 'USDe');
+
+INSERT INTO basket_mapping_versions (id, mapping_key, content_version)
+VALUES ('00000000-0000-0000-0000-000000000011', 'crest_large_cap', 1);
+
+INSERT INTO basket_mapping_components (basket_mapping_version_id, market_asset_id, weight)
+VALUES ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 0.40000000),
+       ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000002', 0.60000000);
+
+INSERT INTO keeper_definition_versions (
+    id, keeper_key, content_version, name, current_key, current_name,
+    sector_key, role_key, rarity_key, base_risk_key, passive_rule_key,
+    passive_rule_config, upgrade_tree, basket_mapping_version_id
+) VALUES (
+    '00000000-0000-0000-0000-000000000021',
+    'crest_sovereign', 1, 'Crest Sovereign',
+    'sovereign_current', 'Sovereign Current',
+    'CREST', 'VANGUARD', 'COMMON', 'LOW_TO_MEDIUM',
+    'TEST_RULE', '{}'::jsonb, '{}'::jsonb,
+    '00000000-0000-0000-0000-000000000011'
+);
+
+-- ── Standard MVP definition with starter Keeper and initial shop ────────────
 
 INSERT INTO voyage_definition_versions (
     id, definition_key, version, status, duration_days,
@@ -205,14 +231,20 @@ INSERT INTO voyage_definition_versions (
             "synergies":[],"warnings":[{"code":"EMPTY_SLOT","severity":"WARNING","message":"All slots are empty."}]
         },
         "inventory":[],
-        "shop":{"offers":[],"refreshAt":null,"rerollCost":2,"rerollIndex":0},
+        "shop":{"offers":[{"id":"crest_sovereign_offer","keeper":{"id":"crest_sovereign_preview","definitionId":"crest_sovereign","name":"Crest Sovereign","level":1,"rarity":"COMMON","role":"VANGUARD","sector":"CREST","passiveSummary":"Commands the Crest sector with authority.","artworkUrl":null},"cost":5,"available":true,"synergyHint":null}],"refreshAt":null,"rerollCost":2,"rerollIndex":0},
         "strategies":[],
         "selectedStrategyId":null,
         "pendingRewardCount":0
     }'::jsonb,
-    E'\\x7374616e64617264' || repeat(E'\\x00', 23),
+    decode('7374616e64617264000000000000000000000000000000000000000000000000', 'hex'),
     transaction_timestamp()
 );
+
+INSERT INTO voyage_definition_starter_keepers (voyage_definition_version_id, keeper_definition_version_id, position)
+VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000021', 0);
+
+INSERT INTO voyage_definition_initial_shop_offers (voyage_definition_version_id, keeper_definition_version_id, position, cost)
+VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000021', 0, 5);
 
 -- ── Legacy definition for existing development voyages ─────────────────────
 
@@ -245,7 +277,7 @@ INSERT INTO voyage_definition_versions (
         "selectedStrategyId":null,
         "pendingRewardCount":0
     }'::jsonb,
-    E'\\x6c6567616379' || repeat(E'\\x00', 28),
+    decode('6c65676163790000000000000000000000000000000000000000000000000000', 'hex'),
     transaction_timestamp()
 );
 
@@ -409,6 +441,19 @@ $$;
 CREATE TRIGGER voyages_terminal_immutability_trigger
     BEFORE UPDATE OR DELETE ON voyages
     FOR EACH ROW EXECUTE FUNCTION voyage_guard_terminal_immutability();
+
+-- ── Add voyage_id to keeper_instances for voyage-scoped inventory ──────────
+
+ALTER TABLE keeper_instances
+    ADD COLUMN voyage_id uuid;
+
+ALTER TABLE keeper_instances
+    ADD CONSTRAINT keeper_instances_voyage_fk
+        FOREIGN KEY (voyage_id) REFERENCES voyages (id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+CREATE INDEX keeper_instances_voyage_idx
+    ON keeper_instances (voyage_id);
 
 -- ── Remove deprecated text key ─────────────────────────────────────────────
 
