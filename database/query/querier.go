@@ -11,43 +11,65 @@ import (
 )
 
 type Querier interface {
+	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (IdempotencyKey, error)
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	CountCatalogReleaseRows(ctx context.Context, releaseVersion int64) (CountCatalogReleaseRowsRow, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) error
 	CreateDraftContentRelease(ctx context.Context, arg CreateDraftContentReleaseParams) error
 	CreatePlayer(ctx context.Context, arg CreatePlayerParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	GetAccountForLogin(ctx context.Context, email string) (GetAccountForLoginRow, error)
+	GetActiveVoyageForPlayer(ctx context.Context, playerID pgtype.UUID) (GetActiveVoyageForPlayerRow, error)
 	GetAuthenticatedSession(ctx context.Context, tokenDigest []byte) (GetAuthenticatedSessionRow, error)
 	GetBasketCalculationMapping(ctx context.Context, basketMappingVersionID pgtype.UUID) (GetBasketCalculationMappingRow, error)
 	GetBasketMetricByTideAndMapping(ctx context.Context, arg GetBasketMetricByTideAndMappingParams) (BasketMetric, error)
 	GetContentRelease(ctx context.Context, version int64) (ContentRelease, error)
 	GetCurrentDailyContextForPlayer(ctx context.Context, playerID pgtype.UUID) (GetCurrentDailyContextForPlayerRow, error)
+	GetCurrentVoyageForPlayer(ctx context.Context, playerID pgtype.UUID) (GetCurrentVoyageForPlayerRow, error)
+	GetIdempotencyKeyForUpdate(ctx context.Context, arg GetIdempotencyKeyForUpdateParams) (IdempotencyKey, error)
 	GetKeeperSectorResultByTideAndDefinition(ctx context.Context, arg GetKeeperSectorResultByTideAndDefinitionParams) (KeeperSectorResult, error)
 	GetMarketAssetByKey(ctx context.Context, assetKey string) (MarketAsset, error)
 	GetMeForPlayer(ctx context.Context, playerID pgtype.UUID) (GetMeForPlayerRow, error)
+	GetOpenDailyTide(ctx context.Context, dayKey pgtype.Date) (DailyTide, error)
+	GetPublishedVoyageDefinition(ctx context.Context, definitionKey string) (VoyageDefinitionVersion, error)
 	GetSectorBenchmarkByTideAndDefinition(ctx context.Context, arg GetSectorBenchmarkByTideAndDefinitionParams) (SectorBenchmark, error)
+	GetVoyageByPublicID(ctx context.Context, publicID string) (GetVoyageByPublicIDRow, error)
+	GetVoyageByPublicIDAndPlayerID(ctx context.Context, arg GetVoyageByPublicIDAndPlayerIDParams) (GetVoyageByPublicIDAndPlayerIDRow, error)
+	GetVoyageDefinitionByID(ctx context.Context, id pgtype.UUID) (VoyageDefinitionVersion, error)
+	GetVoyageDefinitionInitialOffers(ctx context.Context, voyageDefinitionVersionID pgtype.UUID) ([]GetVoyageDefinitionInitialOffersRow, error)
+	GetVoyageDefinitionStarterKeepers(ctx context.Context, voyageDefinitionVersionID pgtype.UUID) ([]GetVoyageDefinitionStarterKeepersRow, error)
 	InsertBasketMappingComponent(ctx context.Context, arg InsertBasketMappingComponentParams) error
 	InsertBasketMappingVersion(ctx context.Context, arg InsertBasketMappingVersionParams) error
 	InsertBasketMetric(ctx context.Context, arg InsertBasketMetricParams) error
 	InsertBasketMetricComponent(ctx context.Context, arg InsertBasketMetricComponentParams) error
 	InsertExpectedTurbulencePolicy(ctx context.Context, arg InsertExpectedTurbulencePolicyParams) error
 	InsertKeeperDefinitionVersion(ctx context.Context, arg InsertKeeperDefinitionVersionParams) error
+	InsertKeeperInstance(ctx context.Context, arg InsertKeeperInstanceParams) error
 	InsertKeeperSectorResult(ctx context.Context, arg InsertKeeperSectorResultParams) error
 	InsertMarketAsset(ctx context.Context, arg InsertMarketAssetParams) error
 	InsertMarketCalculationWindow(ctx context.Context, arg InsertMarketCalculationWindowParams) error
 	InsertMarketPriceObservation(ctx context.Context, arg InsertMarketPriceObservationParams) error
+	InsertPlayerDailyStateWithView(ctx context.Context, arg InsertPlayerDailyStateWithViewParams) error
 	InsertSectorBenchmark(ctx context.Context, arg InsertSectorBenchmarkParams) error
 	InsertSectorBenchmarkMember(ctx context.Context, arg InsertSectorBenchmarkMemberParams) error
 	InsertSectorDefinitionVersion(ctx context.Context, arg InsertSectorDefinitionVersionParams) error
+	InsertVoyage(ctx context.Context, arg InsertVoyageParams) (InsertVoyageRow, error)
+	InsertVoyageLedgerEntry(ctx context.Context, arg InsertVoyageLedgerEntryParams) error
+	InsertVoyageLifecycleEvent(ctx context.Context, arg InsertVoyageLifecycleEventParams) error
 	ListBasketCalculationMappingComponents(ctx context.Context, basketMappingVersionID pgtype.UUID) ([]BasketMappingComponent, error)
 	ListBasketMetricComponents(ctx context.Context, basketMetricID pgtype.UUID) ([]BasketMetricComponent, error)
 	ListKeeperInstancesForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListKeeperInstancesForPlayerRow, error)
+	ListLifecycleEventsForVoyage(ctx context.Context, voyageID pgtype.UUID) ([]VoyageLifecycleEvent, error)
 	ListMarketPriceObservationsForAsset(ctx context.Context, arg ListMarketPriceObservationsForAssetParams) ([]MarketPriceObservation, error)
 	ListReadyBasketMetricsForSectorBenchmark(ctx context.Context, arg ListReadyBasketMetricsForSectorBenchmarkParams) ([]BasketMetric, error)
 	ListSectorBenchmarkMembers(ctx context.Context, sectorBenchmarkID pgtype.UUID) ([]SectorBenchmarkMember, error)
 	ListTargetBasketCalculationMappingsForContent(ctx context.Context, contentVersion int64) ([]ListTargetBasketCalculationMappingsForContentRow, error)
 	ListTargetSectorBenchmarkReadiness(ctx context.Context, arg ListTargetSectorBenchmarkReadinessParams) ([]ListTargetSectorBenchmarkReadinessRow, error)
+	LockPlayerRow(ctx context.Context, id pgtype.UUID) (Player, error)
+	LockVoyageRowForUpdate(ctx context.Context, id pgtype.UUID) (LockVoyageRowForUpdateRow, error)
 	PublishContentRelease(ctx context.Context, version int64) error
+	UpdatePlayerCurrentVoyage(ctx context.Context, arg UpdatePlayerCurrentVoyageParams) error
+	UpdateVoyageStatus(ctx context.Context, arg UpdateVoyageStatusParams) (UpdateVoyageStatusRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -17,6 +17,36 @@ const (
 	StatusAbandoned Status = "ABANDONED"
 )
 
+// VoyageResponse is the API response for a single voyage resource.
+type VoyageResponse struct {
+	PublicID          string     `json:"id"`
+	DefinitionKey     string     `json:"definitionKey"`
+	DefinitionVersion int64      `json:"definitionVersion"`
+	Status            string     `json:"status"`
+	DayNumber         int        `json:"dayNumber"`
+	FundHealth        int        `json:"fundHealth"`
+	MaxFundHealth     int        `json:"maxFundHealth"`
+	Capital           int        `json:"capital"`
+	Score             string     `json:"score"`
+	RowVersion        int64      `json:"rowVersion"`
+	StartedAt         time.Time  `json:"startedAt"`
+	CompletedAt       *time.Time `json:"completedAt"`
+}
+
+// LifecycleEvent is a single event in the voyage lifecycle history.
+type LifecycleEvent struct {
+	PublicID        string    `json:"id"`
+	EventType       string    `json:"eventType"`
+	ResultingStatus string    `json:"resultingStatus"`
+	OccurredAt      time.Time `json:"occurredAt"`
+}
+
+// VoyageHistoryResponse is the API response for voyage lifecycle history.
+type VoyageHistoryResponse struct {
+	Voyage VoyageResponse   `json:"voyage"`
+	Events []LifecycleEvent `json:"events"`
+}
+
 // Summary is the transport-independent Voyage portion of daily context.
 type Summary struct {
 	PublicID      string

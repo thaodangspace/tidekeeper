@@ -14,6 +14,7 @@ import (
 	"github.com/thaodangspace/tidekeepers-server/httpapi"
 	"github.com/thaodangspace/tidekeepers-server/httpapi/handlers"
 	"github.com/thaodangspace/tidekeepers-server/player"
+	"github.com/thaodangspace/tidekeepers-server/voyage"
 )
 
 func TestOpenAPIIsValid(t *testing.T) {
@@ -110,9 +111,11 @@ func buildRouter(t *testing.T) chi.Router {
 	keepers := handlers.NewPlayerKeepers(playerSvc)
 	dailySvc := daily.NewService(&nopDailyReader{})
 	dailyCtx := handlers.NewDailyContextHandler(dailySvc)
+	voyageSvc := &nopVoyageService{}
+	voyageHandler := handlers.NewVoyageHandler(voyageSvc)
 
 	return httpapi.NewFoundationRouter(
-		health, authHandler, authenticator, me, keepers, dailyCtx,
+		health, authHandler, authenticator, me, keepers, dailyCtx, voyageHandler,
 		"sid", false, "", logger,
 	).(*chi.Mux)
 }
@@ -150,6 +153,24 @@ type nopDailyReader struct{}
 
 func (n *nopDailyReader) GetCurrentDailyContext(_ context.Context, _ daily.ID) (daily.DailyContext, error) {
 	return daily.DailyContext{}, nil
+}
+
+type nopVoyageService struct{}
+
+func (n *nopVoyageService) Create(_ context.Context, _, _ string) (*voyage.VoyageResponse, error) {
+	return nil, nil
+}
+func (n *nopVoyageService) GetCurrent(_ context.Context, _ string) (*voyage.VoyageResponse, error) {
+	return nil, nil
+}
+func (n *nopVoyageService) GetByID(_ context.Context, _, _ string) (*voyage.VoyageResponse, error) {
+	return nil, nil
+}
+func (n *nopVoyageService) Abandon(_ context.Context, _, _, _ string) (*voyage.VoyageResponse, error) {
+	return nil, nil
+}
+func (n *nopVoyageService) GetHistory(_ context.Context, _, _ string) (*voyage.VoyageHistoryResponse, error) {
+	return nil, nil
 }
 
 func loadDocument(t *testing.T) *openapi3.T {

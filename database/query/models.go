@@ -97,6 +97,19 @@ type ExpectedTurbulencePolicy struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
+type IdempotencyKey struct {
+	PlayerID       pgtype.UUID        `json:"player_id"`
+	Scope          string             `json:"scope"`
+	Key            string             `json:"key"`
+	State          string             `json:"state"`
+	RequestHash    []byte             `json:"request_hash"`
+	ResultVoyageID pgtype.UUID        `json:"result_voyage_id"`
+	ResponseStatus *int16             `json:"response_status"`
+	ResponseJson   []byte             `json:"response_json"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+}
+
 type KeeperDefinitionVersion struct {
 	ID                     pgtype.UUID        `json:"id"`
 	KeeperKey              string             `json:"keeper_key"`
@@ -123,6 +136,7 @@ type KeeperInstance struct {
 	KeeperDefinitionVersionID pgtype.UUID        `json:"keeper_definition_version_id"`
 	Level                     int16              `json:"level"`
 	AcquiredAt                pgtype.Timestamptz `json:"acquired_at"`
+	VoyageID                  pgtype.UUID        `json:"voyage_id"`
 }
 
 type KeeperSectorResult struct {
@@ -269,19 +283,71 @@ type Session struct {
 }
 
 type Voyage struct {
-	ID                   pgtype.UUID        `json:"id"`
-	PublicID             string             `json:"public_id"`
-	PlayerID             pgtype.UUID        `json:"player_id"`
-	Status               string             `json:"status"`
-	DefinitionVersionKey string             `json:"definition_version_key"`
-	CurrentDayNumber     int16              `json:"current_day_number"`
-	FundHealth           int32              `json:"fund_health"`
-	MaxFundHealth        int32              `json:"max_fund_health"`
-	Capital              int32              `json:"capital"`
-	Score                pgtype.Numeric     `json:"score"`
-	RowVersion           int64              `json:"row_version"`
-	StartedAt            pgtype.Timestamptz `json:"started_at"`
-	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ID                        pgtype.UUID        `json:"id"`
+	PublicID                  string             `json:"public_id"`
+	PlayerID                  pgtype.UUID        `json:"player_id"`
+	Status                    string             `json:"status"`
+	CurrentDayNumber          int16              `json:"current_day_number"`
+	FundHealth                int32              `json:"fund_health"`
+	MaxFundHealth             int32              `json:"max_fund_health"`
+	Capital                   int32              `json:"capital"`
+	Score                     pgtype.Numeric     `json:"score"`
+	RowVersion                int64              `json:"row_version"`
+	StartedAt                 pgtype.Timestamptz `json:"started_at"`
+	CompletedAt               pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+	VoyageDefinitionVersionID pgtype.UUID        `json:"voyage_definition_version_id"`
+}
+
+type VoyageDefinitionInitialShopOffer struct {
+	VoyageDefinitionVersionID pgtype.UUID `json:"voyage_definition_version_id"`
+	KeeperDefinitionVersionID pgtype.UUID `json:"keeper_definition_version_id"`
+	Position                  int16       `json:"position"`
+	Cost                      int32       `json:"cost"`
+}
+
+type VoyageDefinitionStarterKeeper struct {
+	VoyageDefinitionVersionID pgtype.UUID `json:"voyage_definition_version_id"`
+	KeeperDefinitionVersionID pgtype.UUID `json:"keeper_definition_version_id"`
+	Position                  int16       `json:"position"`
+}
+
+type VoyageDefinitionVersion struct {
+	ID                 pgtype.UUID        `json:"id"`
+	DefinitionKey      string             `json:"definition_key"`
+	Version            int64              `json:"version"`
+	Status             string             `json:"status"`
+	DurationDays       int16              `json:"duration_days"`
+	StartingHull       int32              `json:"starting_hull"`
+	StartingSupplies   int32              `json:"starting_supplies"`
+	FleetSlotCount     int16              `json:"fleet_slot_count"`
+	InitialPhase       string             `json:"initial_phase"`
+	LaunchPresentation []byte             `json:"launch_presentation"`
+	Checksum           []byte             `json:"checksum"`
+	PublishedAt        pgtype.Timestamptz `json:"published_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type VoyageLedgerEntry struct {
+	ID           pgtype.UUID        `json:"id"`
+	VoyageID     pgtype.UUID        `json:"voyage_id"`
+	EntryType    string             `json:"entry_type"`
+	Amount       int32              `json:"amount"`
+	BalanceAfter int32              `json:"balance_after"`
+	SourceType   string             `json:"source_type"`
+	SourceID     string             `json:"source_id"`
+	ReasonKey    string             `json:"reason_key"`
+	OccurredAt   pgtype.Timestamptz `json:"occurred_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type VoyageLifecycleEvent struct {
+	ID              pgtype.UUID        `json:"id"`
+	PublicID        string             `json:"public_id"`
+	VoyageID        pgtype.UUID        `json:"voyage_id"`
+	EventType       string             `json:"event_type"`
+	ResultingStatus string             `json:"resulting_status"`
+	OccurredAt      pgtype.Timestamptz `json:"occurred_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
