@@ -275,3 +275,96 @@ func TestKeeperInventoryMigrationRejectsOwnershipMismatch(t *testing.T) {
 
 	expectExecError(t, ctx, conn, readMigrationFile(t, "000008_meta_and_voyage_keeper_inventory.up.sql"))
 }
+
+func TestKeeperInventoryUpgradePathFromLegacyEmptyTree(t *testing.T) {
+	ctx := context.Background()
+	conn, _ := connectInventorySchema(t, ctx, "inv_upgrade_path")
+	applyMigration(t, ctx, conn, "000001_foundation.up.sql")
+	applyMigration(t, ctx, conn, "000002_keepers_catalog.up.sql")
+	applyMigration(t, ctx, conn, "000003_auth_credentials.up.sql")
+	applyMigration(t, ctx, conn, "000004_player_keeper_instances.up.sql")
+	applyMigration(t, ctx, conn, "000005_four_sector_calculation.up.sql")
+	applyMigration(t, ctx, conn, "000006_voyage_lifecycle.up.sql")
+
+	// A database that already ran the originally shipped 000006 has the MVP
+	// definition (content_version 1) with an empty upgrade_tree while its
+	// release is already PUBLISHED. The shipped migration cannot be replayed on
+	// a fresh schema (it violates the content_releases publication check and the
+	// catalog draft-only guards), so reproduce its exact resulting state by
+	// rewriting the seeded tree back to '{}' under the same guard bypass that
+	// 000007 applies.
+	mustExec(t, ctx, conn, "ALTER TABLE keeper_definition_versions DISABLE TRIGGER keeper_definition_versions_draft_only_trigger")
+	mustExec(t, ctx, conn, `
+		UPDATE keeper_definition_versions
+		SET upgrade_tree = '{}'::jsonb
+		WHERE id = $1 AND keeper_key = 'crest_sovereign' AND content_version = 1
+	`, invKeeperDefID)
+	mustExec(t, ctx, conn, "ALTER TABLE keeper_definition_versions ENABLE TRIGGER keeper_definition_versions_draft_only_trigger")
+
+	var legacyTree string
+	if err := conn.QueryRow(ctx, `
+		SELECT upgrade_tree::text
+		FROM keeper_definition_versions
+		WHERE id = $1
+	`, invKeeperDefID).Scan(&legacyTree); err != nil {
+		t.Fatalf("load legacy definition tree: %v", err)
+	}
+	if legacyTree != "{}" {
+		t.Fatalf("legacy definition upgrade_tree = %q, want {} to reproduce the shipped 000006 state", legacyTree)
+	}
+
+	applyMigration(t, ctx, conn, "000007_keeper_definition_upgrade_nodes.up.sql")
+
+	var (
+		nodeRows int
+		nodeRoot int
+		depth    int16
+	)
+	if err := conn.QueryRow(ctx, `
+		SELECT count(*), count(*) FILTER (WHERE is_root)
+		FROM keeper_definition_upgrade_nodes
+		WHERE keeper_definition_version_id = $1
+	`, invKeeperDefID).Scan(&nodeRows, &nodeRoot); err != nil {
+		t.Fatalf("count repaired upgrade nodes: %v", err)
+	}
+	if nodeRows != 3 || nodeRoot != 1 {
+		t.Fatalf("repaired nodes = %d rows / %d roots, want 3 rows / 1 root", nodeRows, nodeRoot)
+	}
+	if err := conn.QueryRow(ctx, `
+		SELECT depth
+		FROM keeper_definition_upgrade_nodes
+		WHERE keeper_definition_version_id = $1 AND node_key = 'deep_crown'
+	`, invKeeperDefID).Scan(&depth); err != nil {
+		t.Fatalf("load repaired deep_crown depth: %v", err)
+	}
+	if depth != 1 {
+		t.Errorf("repaired deep_crown depth = %d, want 1", depth)
+	}
+
+	applyMigration(t, ctx, conn, "000008_meta_and_voyage_keeper_inventory.up.sql")
+
+	var unlockTableExists bool
+	if err := conn.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = current_schema() AND table_name = 'player_keeper_unlocks'
+		)
+	`).Scan(&unlockTableExists); err != nil {
+		t.Fatalf("check unlock table: %v", err)
+	}
+	if !unlockTableExists {
+		t.Error("player_keeper_unlocks should exist after upgrading the shipped 000006 database")
+	}
+
+	var repairedRoot string
+	if err := conn.QueryRow(ctx, `
+		SELECT upgrade_tree->>'rootNodeKey'
+		FROM keeper_definition_versions
+		WHERE id = $1
+	`, invKeeperDefID).Scan(&repairedRoot); err != nil {
+		t.Fatalf("load repaired definition tree: %v", err)
+	}
+	if repairedRoot != "base" {
+		t.Errorf("repaired definition root node = %q, want base", repairedRoot)
+	}
+}

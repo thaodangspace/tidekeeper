@@ -202,12 +202,17 @@ func validEmail(email string) bool {
 }
 
 func newPlayerPublicID() (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("generate player public ID: %w", err)
+	for {
+		bytes := make([]byte, 12)
+		if _, err := rand.Read(bytes); err != nil {
+			return "", fmt.Errorf("generate player public ID: %w", err)
+		}
+		id := "plr_" + base64.RawURLEncoding.EncodeToString(bytes)
+		if c := id[len("plr_")]; c == '-' || c == '_' {
+			continue
+		}
+		return id, nil
 	}
-	defer clear(bytes)
-	return "plr_" + base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
 func randomUUID() (pgtype.UUID, error) {

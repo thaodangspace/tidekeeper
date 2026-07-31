@@ -68,7 +68,7 @@ VALUES (sqlc.arg(id), sqlc.arg(public_id), sqlc.arg(voyage_id),
         sqlc.arg(keeper_definition_version_id), sqlc.arg(upgrade_node_key),
         sqlc.arg(acquired_day), sqlc.arg(acquired_source));
 
--- name: ListActiveVoyageKeepersForPlayer :many
+-- name: ListVoyageKeepers :many
 SELECT
     v.id AS voyage_id,
     v.public_id AS voyage_public_id,
@@ -91,8 +91,7 @@ JOIN keeper_definition_versions AS d ON d.id = i.keeper_definition_version_id
 JOIN keeper_definition_upgrade_nodes AS n
     ON n.keeper_definition_version_id = i.keeper_definition_version_id
    AND n.node_key = i.upgrade_node_key
-WHERE v.player_id = sqlc.arg(player_id)
-  AND v.status = 'ACTIVE'
+WHERE v.id = sqlc.arg(voyage_id)
 ORDER BY i.acquired_day ASC, i.acquired_at ASC, i.id ASC;
 
 -- name: InsertPlayerDailyStateWithView :exec

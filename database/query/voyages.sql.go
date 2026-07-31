@@ -726,88 +726,6 @@ func (q *Queries) InsertVoyageLifecycleEvent(ctx context.Context, arg InsertVoya
 	return err
 }
 
-const listActiveVoyageKeepersForPlayer = `-- name: ListActiveVoyageKeepersForPlayer :many
-SELECT
-    v.id AS voyage_id,
-    v.public_id AS voyage_public_id,
-    i.public_id AS keeper_public_id,
-    d.keeper_key AS definition_key,
-    d.content_version AS definition_version,
-    d.name,
-    d.current_name,
-    d.sector_key,
-    d.role_key,
-    d.rarity_key,
-    n.depth AS node_depth,
-    i.upgrade_node_key,
-    i.acquired_day,
-    i.acquired_source,
-    i.acquired_at
-FROM voyages AS v
-JOIN keeper_instances AS i ON i.voyage_id = v.id
-JOIN keeper_definition_versions AS d ON d.id = i.keeper_definition_version_id
-JOIN keeper_definition_upgrade_nodes AS n
-    ON n.keeper_definition_version_id = i.keeper_definition_version_id
-   AND n.node_key = i.upgrade_node_key
-WHERE v.player_id = $1
-  AND v.status = 'ACTIVE'
-ORDER BY i.acquired_day ASC, i.acquired_at ASC, i.id ASC
-`
-
-type ListActiveVoyageKeepersForPlayerRow struct {
-	VoyageID          pgtype.UUID        `json:"voyage_id"`
-	VoyagePublicID    string             `json:"voyage_public_id"`
-	KeeperPublicID    string             `json:"keeper_public_id"`
-	DefinitionKey     string             `json:"definition_key"`
-	DefinitionVersion int64              `json:"definition_version"`
-	Name              string             `json:"name"`
-	CurrentName       string             `json:"current_name"`
-	SectorKey         string             `json:"sector_key"`
-	RoleKey           string             `json:"role_key"`
-	RarityKey         string             `json:"rarity_key"`
-	NodeDepth         int16              `json:"node_depth"`
-	UpgradeNodeKey    string             `json:"upgrade_node_key"`
-	AcquiredDay       int16              `json:"acquired_day"`
-	AcquiredSource    string             `json:"acquired_source"`
-	AcquiredAt        pgtype.Timestamptz `json:"acquired_at"`
-}
-
-func (q *Queries) ListActiveVoyageKeepersForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListActiveVoyageKeepersForPlayerRow, error) {
-	rows, err := q.db.Query(ctx, listActiveVoyageKeepersForPlayer, playerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListActiveVoyageKeepersForPlayerRow{}
-	for rows.Next() {
-		var i ListActiveVoyageKeepersForPlayerRow
-		if err := rows.Scan(
-			&i.VoyageID,
-			&i.VoyagePublicID,
-			&i.KeeperPublicID,
-			&i.DefinitionKey,
-			&i.DefinitionVersion,
-			&i.Name,
-			&i.CurrentName,
-			&i.SectorKey,
-			&i.RoleKey,
-			&i.RarityKey,
-			&i.NodeDepth,
-			&i.UpgradeNodeKey,
-			&i.AcquiredDay,
-			&i.AcquiredSource,
-			&i.AcquiredAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listLifecycleEventsForVoyage = `-- name: ListLifecycleEventsForVoyage :many
 SELECT id, public_id, voyage_id, event_type, resulting_status, occurred_at, created_at
 FROM voyage_lifecycle_events
@@ -832,6 +750,87 @@ func (q *Queries) ListLifecycleEventsForVoyage(ctx context.Context, voyageID pgt
 			&i.ResultingStatus,
 			&i.OccurredAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVoyageKeepers = `-- name: ListVoyageKeepers :many
+SELECT
+    v.id AS voyage_id,
+    v.public_id AS voyage_public_id,
+    i.public_id AS keeper_public_id,
+    d.keeper_key AS definition_key,
+    d.content_version AS definition_version,
+    d.name,
+    d.current_name,
+    d.sector_key,
+    d.role_key,
+    d.rarity_key,
+    n.depth AS node_depth,
+    i.upgrade_node_key,
+    i.acquired_day,
+    i.acquired_source,
+    i.acquired_at
+FROM voyages AS v
+JOIN keeper_instances AS i ON i.voyage_id = v.id
+JOIN keeper_definition_versions AS d ON d.id = i.keeper_definition_version_id
+JOIN keeper_definition_upgrade_nodes AS n
+    ON n.keeper_definition_version_id = i.keeper_definition_version_id
+   AND n.node_key = i.upgrade_node_key
+WHERE v.id = $1
+ORDER BY i.acquired_day ASC, i.acquired_at ASC, i.id ASC
+`
+
+type ListVoyageKeepersRow struct {
+	VoyageID          pgtype.UUID        `json:"voyage_id"`
+	VoyagePublicID    string             `json:"voyage_public_id"`
+	KeeperPublicID    string             `json:"keeper_public_id"`
+	DefinitionKey     string             `json:"definition_key"`
+	DefinitionVersion int64              `json:"definition_version"`
+	Name              string             `json:"name"`
+	CurrentName       string             `json:"current_name"`
+	SectorKey         string             `json:"sector_key"`
+	RoleKey           string             `json:"role_key"`
+	RarityKey         string             `json:"rarity_key"`
+	NodeDepth         int16              `json:"node_depth"`
+	UpgradeNodeKey    string             `json:"upgrade_node_key"`
+	AcquiredDay       int16              `json:"acquired_day"`
+	AcquiredSource    string             `json:"acquired_source"`
+	AcquiredAt        pgtype.Timestamptz `json:"acquired_at"`
+}
+
+func (q *Queries) ListVoyageKeepers(ctx context.Context, voyageID pgtype.UUID) ([]ListVoyageKeepersRow, error) {
+	rows, err := q.db.Query(ctx, listVoyageKeepers, voyageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVoyageKeepersRow{}
+	for rows.Next() {
+		var i ListVoyageKeepersRow
+		if err := rows.Scan(
+			&i.VoyageID,
+			&i.VoyagePublicID,
+			&i.KeeperPublicID,
+			&i.DefinitionKey,
+			&i.DefinitionVersion,
+			&i.Name,
+			&i.CurrentName,
+			&i.SectorKey,
+			&i.RoleKey,
+			&i.RarityKey,
+			&i.NodeDepth,
+			&i.UpgradeNodeKey,
+			&i.AcquiredDay,
+			&i.AcquiredSource,
+			&i.AcquiredAt,
 		); err != nil {
 			return nil, err
 		}

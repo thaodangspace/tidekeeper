@@ -58,7 +58,6 @@ type Querier interface {
 	InsertVoyage(ctx context.Context, arg InsertVoyageParams) (InsertVoyageRow, error)
 	InsertVoyageLedgerEntry(ctx context.Context, arg InsertVoyageLedgerEntryParams) error
 	InsertVoyageLifecycleEvent(ctx context.Context, arg InsertVoyageLifecycleEventParams) error
-	ListActiveVoyageKeepersForPlayer(ctx context.Context, playerID pgtype.UUID) ([]ListActiveVoyageKeepersForPlayerRow, error)
 	ListBasketCalculationMappingComponents(ctx context.Context, basketMappingVersionID pgtype.UUID) ([]BasketMappingComponent, error)
 	ListBasketMetricComponents(ctx context.Context, basketMetricID pgtype.UUID) ([]BasketMetricComponent, error)
 	ListLifecycleEventsForVoyage(ctx context.Context, voyageID pgtype.UUID) ([]VoyageLifecycleEvent, error)
@@ -68,6 +67,7 @@ type Querier interface {
 	ListSectorBenchmarkMembers(ctx context.Context, sectorBenchmarkID pgtype.UUID) ([]SectorBenchmarkMember, error)
 	ListTargetBasketCalculationMappingsForContent(ctx context.Context, contentVersion int64) ([]ListTargetBasketCalculationMappingsForContentRow, error)
 	ListTargetSectorBenchmarkReadiness(ctx context.Context, arg ListTargetSectorBenchmarkReadinessParams) ([]ListTargetSectorBenchmarkReadinessRow, error)
+	ListVoyageKeepers(ctx context.Context, voyageID pgtype.UUID) ([]ListVoyageKeepersRow, error)
 	LockPlayerRow(ctx context.Context, id pgtype.UUID) (Player, error)
 	LockVoyageRowForUpdate(ctx context.Context, id pgtype.UUID) (LockVoyageRowForUpdateRow, error)
 	PublishContentRelease(ctx context.Context, version int64) error

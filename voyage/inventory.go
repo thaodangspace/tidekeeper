@@ -36,8 +36,9 @@ type VoyageKeepers struct {
 }
 
 // GetActiveVoyageKeepers returns the authenticated player's active Voyage
-// inventory. Ownership and ACTIVE status are enforced in SQL. Returns
-// ErrNoActiveVoyage when the player has no active Voyage.
+// inventory. Ownership and ACTIVE status are enforced in SQL, and the keeper
+// list is filtered to the exact resolved Voyage so the response never mixes
+// two Voyages. Returns ErrNoActiveVoyage when the player has no active Voyage.
 func (s *Service) GetActiveVoyageKeepers(ctx context.Context, playerID string) (*VoyageKeepers, error) {
 	pid, err := parseUUID(playerID)
 	if err != nil {
@@ -53,9 +54,9 @@ func (s *Service) GetActiveVoyageKeepers(ctx context.Context, playerID string) (
 		return nil, fmt.Errorf("%w: get active voyage: %w", ErrServiceUnavailable, err)
 	}
 
-	rows, err := q.ListActiveVoyageKeepersForPlayer(ctx, pid)
+	rows, err := q.ListVoyageKeepers(ctx, voyageRow.ID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: list active voyage keepers: %w", ErrServiceUnavailable, err)
+		return nil, fmt.Errorf("%w: list voyage keepers: %w", ErrServiceUnavailable, err)
 	}
 
 	keepers := make([]VoyageKeeper, len(rows))

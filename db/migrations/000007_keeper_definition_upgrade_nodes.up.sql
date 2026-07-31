@@ -4,6 +4,35 @@
 -- projection derived from it. Existing published definitions are backfilled
 -- from their immutable JSON before mutation guards are enabled.
 
+-- ── Forward repair for databases already on the shipped 000006 ──────────────
+-- The originally shipped 000006 seeded the MVP `crest_sovereign` definition
+-- (content_version 1) with an empty `{}` upgrade_tree. Those databases cannot
+-- rerun the corrected 000006, so restore the canonical tree here before the
+-- normalized-node validation below. The definition belongs to a PUBLISHED
+-- release, so the catalog draft-only guard is briefly disabled around the
+-- repair; the migration applies atomically, restoring the trigger either way.
+
+ALTER TABLE keeper_definition_versions
+    DISABLE TRIGGER keeper_definition_versions_draft_only_trigger;
+
+UPDATE keeper_definition_versions
+SET upgrade_tree = '{
+    "rootNodeKey":"base",
+    "nodes":[
+        {"key":"base","name":"Base","next":["deep_crown","rising_throne"],"effects":{}},
+        {"key":"deep_crown","name":"Deep Crown","next":[],"effects":{"broadDeclineDepthPenaltyReductionBps":2500}},
+        {"key":"rising_throne","name":"Rising Throne","next":[],"effects":{"sectorRelativeScoreBonusBps":null}}
+    ]
+}'::jsonb
+WHERE id = '00000000-0000-0000-0000-000000000021'
+  AND keeper_key = 'crest_sovereign'
+  AND content_version = 1
+  AND (jsonb_typeof(upgrade_tree->'nodes') IS DISTINCT FROM 'array'
+       OR jsonb_array_length(upgrade_tree->'nodes') = 0);
+
+ALTER TABLE keeper_definition_versions
+    ENABLE TRIGGER keeper_definition_versions_draft_only_trigger;
+
 CREATE TABLE keeper_definition_upgrade_nodes (
     keeper_definition_version_id uuid NOT NULL,
     node_key text NOT NULL,
