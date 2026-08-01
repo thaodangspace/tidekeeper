@@ -80,11 +80,11 @@ function canonicalReleaseJson(release: CatalogRelease): string {
       a,
       b,
     ) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
-    sectorDefinitions: [...release.sectorDefinitions].sort((
+    sectorDefinitions: [...(release.sectorDefinitions ?? [])].sort((
       a,
       b,
     ) => (a.sector < b.sector ? -1 : a.sector > b.sector ? 1 : 0)),
-    turbulencePolicies: [...release.turbulencePolicies].sort((
+    turbulencePolicies: [...(release.turbulencePolicies ?? [])].sort((
       a,
       b,
     ) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),

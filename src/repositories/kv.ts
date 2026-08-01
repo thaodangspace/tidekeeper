@@ -111,6 +111,14 @@ export function sequenceKey(name: string): KvKey {
   return ["sequence", name];
 }
 
+export function contentReleaseKey(version: number): KvKey {
+  return ["content_release", version];
+}
+
+export function contentLatestKey(): KvKey {
+  return ["content_release_latest"];
+}
+
 /** Type alias for a Deno KV handle. */
 export type DenoKvInstance = Deno.Kv;
 

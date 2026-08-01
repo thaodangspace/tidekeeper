@@ -10,9 +10,9 @@ export interface UpgradeNode {
 
 const contentKeyPattern = /^[a-z][a-z0-9_]*$/;
 
-function isJsonObject(text: string): boolean {
+function isJsonObject(input: unknown): boolean {
   try {
-    const value = JSON.parse(text);
+    const value = typeof input === "string" ? JSON.parse(input) : input;
     return value !== null && typeof value === "object" && !Array.isArray(value);
   } catch {
     return false;
@@ -21,7 +21,7 @@ function isJsonObject(text: string): boolean {
 
 interface ParsedTree {
   rootNodeKey: string;
-  nodes: { key: string; name: string; next: string[]; effects: string }[];
+  nodes: { key: string; name: string; next: string[]; effects: unknown }[];
 }
 
 /**

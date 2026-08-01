@@ -112,8 +112,8 @@ export function validateKeeperCatalog(release: CatalogRelease): void {
   }
 
   const { sectorDefinitions, turbulencePolicies } = validateCalculationPolicies(
-    release.sectorDefinitions,
-    release.turbulencePolicies,
+    release.sectorDefinitions ?? [],
+    release.turbulencePolicies ?? [],
   );
 
   const assets = new Map<string, string>();
