@@ -27,6 +27,56 @@ export type Status = "READY" | "DATA_INCOMPLETE";
 export const StatusReady: Status = "READY";
 export const StatusDataIncomplete: Status = "DATA_INCOMPLETE";
 
+export interface ReadinessEntry {
+  sector: SectorKey;
+  status: Status | null;
+  eligibleBasketCount: number;
+  minimumRequiredBaskets: number;
+  ready: boolean;
+}
+
+export interface Readiness {
+  ready: boolean;
+  sectors: ReadinessEntry[];
+}
+
+/** Requires a ready benchmark and sufficient eligible baskets for every target sector. */
+export function evaluateReadiness(
+  definitions: Definition[],
+  benchmarks: Benchmark[],
+): Readiness {
+  const definitionsBySector = new Map<SectorKey, Definition>();
+  for (const definition of definitions) {
+    if (isCalculationTarget(definition.sector)) {
+      definitionsBySector.set(definition.sector, definition);
+    }
+  }
+  const benchmarksBySector = new Map<SectorKey, Benchmark>();
+  for (const benchmark of benchmarks) {
+    if (isCalculationTarget(benchmark.sector)) {
+      benchmarksBySector.set(benchmark.sector, benchmark);
+    }
+  }
+  const sectors: ReadinessEntry[] = [];
+  let ready = true;
+  for (const sector of targetKeys()) {
+    const definition = definitionsBySector.get(sector);
+    const benchmark = benchmarksBySector.get(sector);
+    const entry: ReadinessEntry = {
+      sector,
+      status: benchmark?.status ?? null,
+      eligibleBasketCount: benchmark?.eligibleBasketCount ?? 0,
+      minimumRequiredBaskets: definition?.minimumEligibleBaskets ?? 0,
+      ready: definition !== undefined && benchmark !== undefined &&
+        benchmark.status === StatusReady &&
+        benchmark.eligibleBasketCount >= definition.minimumEligibleBaskets,
+    };
+    if (!entry.ready) ready = false;
+    sectors.push(entry);
+  }
+  return { ready, sectors };
+}
+
 export interface Definition {
   id: string;
   sector: SectorKey;
