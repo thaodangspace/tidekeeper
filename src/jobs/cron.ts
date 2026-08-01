@@ -11,6 +11,7 @@ import type { VoyageRepository } from "../repositories/voyage_repository.ts";
 import type { SettlementService } from "../services/settlement_service.ts";
 import type { MarketProvider } from "../market/provider.ts";
 import type { SettlementInput } from "../domain/settlement.ts";
+import { decodeAndValidateProjection } from "../domain/projection.ts";
 
 const tidePhase = "REGULAR";
 const tideSettleDelayMs = 3 * 60 * 60 * 1000;
@@ -121,10 +122,7 @@ async function settlementInput(
   prices: Awaited<ReturnType<MarketProvider["fetchPrices"]>>,
   dayNumber: number,
 ): Promise<SettlementInput> {
-  if (!projectionValue || typeof projectionValue !== "object") {
-    throw new Error("invalid daily settlement projection");
-  }
-  const projection = projectionValue as Record<string, unknown>;
+  const projection = decodeAndValidateProjection(1, projectionValue);
   const lineup = projection.lineup as {
     slots?: Array<{ keeper?: Record<string, unknown> | null }>;
   };

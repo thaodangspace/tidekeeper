@@ -55,7 +55,7 @@ export class MarketRepository {
   ): Promise<{ id: string; idempotent: boolean }> {
     const key = basketMetricKey(
       input.window.dailyTideId,
-      metric.basketMappingVersionId,
+      input.mapping.id,
     );
     const existing = await this.#store.get<BasketMetricRecord>(key);
     if (existing) {
@@ -69,7 +69,7 @@ export class MarketRepository {
     const record: BasketMetricRecord = {
       id: newId(),
       dailyTideId: input.window.dailyTideId,
-      mappingId: metric.basketMappingVersionId,
+      mappingId: input.mapping.id,
       input,
       metric,
       createdAt: now.toISOString(),
