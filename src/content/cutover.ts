@@ -82,6 +82,10 @@ export interface CutoverPlan {
 export type CutoverErrorCategory =
   | "invalid-parameters"
   | "unknown-source-version"
+  | "missing-target"
+  | "target-not-published"
+  | "target-not-schema-two"
+  | "target-mismatch"
   | "already-partially-mapped"
   | "missing-projections"
   | "invalid-projection"

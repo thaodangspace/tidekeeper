@@ -157,6 +157,10 @@ export interface DailyTide {
   lockAt: string;
   settleAfter: string;
   contentVersion: number;
+  /** Exact schema-2 content references; absent on legacy KV records. */
+  modifierDefinitionVersionId?: string | null;
+  objectiveDefinitionVersionId?: string | null;
+  gameRuleSetVersionId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

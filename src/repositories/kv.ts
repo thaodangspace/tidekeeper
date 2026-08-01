@@ -119,6 +119,13 @@ export function contentLatestKey(): KvKey {
   return ["content_release_latest"];
 }
 
+export function dailyTideStrategyKey(
+  dailyTideId: string,
+  strategyId: string,
+): KvKey {
+  return ["daily_tide_strategy", dailyTideId, strategyId];
+}
+
 /** Type alias for a Deno KV handle. */
 export type DenoKvInstance = Deno.Kv;
 

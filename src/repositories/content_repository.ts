@@ -33,10 +33,12 @@ export class ContentRepository {
   }
 
   async getPublishedRelease(version: number): Promise<Release | null> {
-    const record = await this.#store.get<ContentReleaseRecord>(
-      contentReleaseKey(version),
-    );
+    const record = await this.getRecord(version);
     return record?.status === "PUBLISHED" ? record.release : null;
+  }
+
+  async getRecord(version: number): Promise<ContentReleaseRecord | null> {
+    return this.#store.get<ContentReleaseRecord>(contentReleaseKey(version));
   }
 
   async getStrategy(version: number, key: string): Promise<Strategy | null> {
