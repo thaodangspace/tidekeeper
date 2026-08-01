@@ -65,7 +65,7 @@ Deno.test("settlement service: persists idempotent result and claims reward", as
       definitionKey: "standard",
       definitionVersion: 1,
       currentDayNumber: 1,
-      fundHealth: 10,
+      fundHealth: 9,
       maxFundHealth: 10,
       capital: 10,
       score: "0.0000",

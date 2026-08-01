@@ -22,7 +22,8 @@ import {
   voyageDailyViewKey,
   voyageKey,
 } from "../repositories/kv.ts";
-import { applyHullDelta, newHull } from "../domain/hull.ts";
+import { newHull } from "../domain/hull.ts";
+import { applyHullMutation } from "../domain/voyage.ts";
 import { conflict, internal, notFound } from "../utils/errors.ts";
 import { newId } from "../utils/ids.ts";
 import { getPublishedVoyageDefinition } from "../content/voyage_definition.ts";
@@ -113,19 +114,29 @@ export class SettlementService {
       ),
       validatedAt: now.toISOString(),
     };
-    const hullResult = applyHullDelta(
-      newHull(voyage.fundHealth, voyage.maxFundHealth),
-      output.hullDelta,
+    const hullResult = applyHullMutation(
+      {
+        status: voyage.status,
+        hull: newHull(voyage.fundHealth, voyage.maxFundHealth),
+        completedAt: voyage.completedAt ? new Date(voyage.completedAt) : null,
+      },
+      {
+        delta: output.hullDelta,
+        sourceType: "SETTLEMENT",
+        sourceId: result.id,
+        reasonKey: output.hullDelta < 0
+          ? "settlement.score_deficit_damage"
+          : "settlement.score_success_repair",
+      },
+      now,
     );
     const updatedVoyage: Voyage = {
       ...voyage,
-      fundHealth: hullResult.hull.current,
+      fundHealth: hullResult.voyage.hull.current,
       capital: Math.max(0, voyage.capital + output.suppliesDelta),
       score: addScores(voyage.score, output.score),
-      status: hullResult.change.destroyed ? "FAILED" : voyage.status,
-      completedAt: hullResult.change.destroyed
-        ? now.toISOString()
-        : voyage.completedAt,
+      status: hullResult.voyage.status,
+      completedAt: hullResult.voyage.completedAt?.toISOString() ?? null,
       rowVersion: voyage.rowVersion + 1,
       updatedAt: now.toISOString(),
     };
