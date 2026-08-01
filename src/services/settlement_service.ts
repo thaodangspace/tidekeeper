@@ -22,7 +22,7 @@ import {
   voyageDailyViewKey,
   voyageKey,
 } from "../repositories/kv.ts";
-import { clamp } from "../market/precision.ts";
+import { applyHullDelta, newHull } from "../domain/hull.ts";
 import { conflict, internal, notFound } from "../utils/errors.ts";
 import { newId } from "../utils/ids.ts";
 import { getPublishedVoyageDefinition } from "../content/voyage_definition.ts";
@@ -113,19 +113,17 @@ export class SettlementService {
       ),
       validatedAt: now.toISOString(),
     };
+    const hullResult = applyHullDelta(
+      newHull(voyage.fundHealth, voyage.maxFundHealth),
+      output.hullDelta,
+    );
     const updatedVoyage: Voyage = {
       ...voyage,
-      fundHealth: clamp(
-        voyage.fundHealth + output.hullDelta,
-        0,
-        voyage.maxFundHealth,
-      ),
+      fundHealth: hullResult.hull.current,
       capital: Math.max(0, voyage.capital + output.suppliesDelta),
       score: addScores(voyage.score, output.score),
-      status: voyage.fundHealth + output.hullDelta <= 0
-        ? "FAILED"
-        : voyage.status,
-      completedAt: voyage.fundHealth + output.hullDelta <= 0
+      status: hullResult.change.destroyed ? "FAILED" : voyage.status,
+      completedAt: hullResult.change.destroyed
         ? now.toISOString()
         : voyage.completedAt,
       rowVersion: voyage.rowVersion + 1,
