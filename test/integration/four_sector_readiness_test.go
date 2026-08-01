@@ -33,6 +33,7 @@ func TestFourSectorReadinessRequiresEveryTargetBenchmark(t *testing.T) {
 	applyMigration(t, ctx, admin, "000002_keepers_catalog.up.sql")
 	applyMigration(t, ctx, admin, "000005_four_sector_calculation.up.sql")
 	applyMigration(t, ctx, admin, "000007_keeper_definition_upgrade_nodes.up.sql")
+	applyMigration(t, ctx, admin, "000009_gameplay_content_foundation.up.sql")
 
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {

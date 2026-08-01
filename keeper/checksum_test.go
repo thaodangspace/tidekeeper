@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"slices"
 	"testing"
 )
@@ -41,5 +42,22 @@ func TestChecksumRejectsInvalidRelease(t *testing.T) {
 	release.Baskets[0].Components[0].Weight--
 	if _, err := Checksum(release); err == nil {
 		t.Fatal("Checksum(invalid release) succeeded")
+	}
+}
+
+func TestCanonicalJSONPreservesSchemaOneChecksumMeaning(t *testing.T) {
+	for _, release := range []CatalogRelease{CatalogV1(), CatalogV2()} {
+		want, err := Checksum(release)
+		if err != nil {
+			t.Fatalf("Checksum(): %v", err)
+		}
+		encoded, err := CanonicalJSON(release)
+		if err != nil {
+			t.Fatalf("CanonicalJSON(): %v", err)
+		}
+		digest := sha256.Sum256(encoded)
+		if !bytes.Equal(digest[:], want[:]) {
+			t.Fatalf("CanonicalJSON digest = %x, want Checksum %x", digest, want)
+		}
 	}
 }
