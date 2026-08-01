@@ -104,6 +104,9 @@ Deno.test("market repository: benchmark evidence is persisted by tide and defini
       benchmark,
     );
     assertEquals(replay, { id: result.id, idempotent: true });
+    const readiness = await repository.loadReadiness("tide-1", [definition]);
+    assertEquals(readiness.ready, false);
+    assertEquals(readiness.sectors.length, 4);
   } finally {
     kv.close();
   }

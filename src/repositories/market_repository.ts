@@ -1,7 +1,12 @@
 /** Immutable market-calculation evidence stored in Deno KV. */
 
 import type { CalculationInput, Metric } from "../market/basket.ts";
-import type { Benchmark, Definition } from "../market/sector.ts";
+import {
+  type Benchmark,
+  type Definition,
+  evaluateReadiness,
+  type Readiness,
+} from "../market/sector.ts";
 import { conflict } from "../utils/errors.ts";
 import { newId } from "../utils/ids.ts";
 import type { Store } from "./kv.ts";
@@ -179,6 +184,20 @@ export class MarketRepository {
       );
     }
     return record.id;
+  }
+
+  async loadReadiness(
+    dailyTideId: string,
+    definitions: Definition[],
+  ): Promise<Readiness> {
+    const records = await this.#store.listValues<SectorBenchmarkRecord>([
+      "market_benchmark",
+      dailyTideId,
+    ]);
+    return evaluateReadiness(
+      definitions,
+      records.map((record) => record.benchmark),
+    );
   }
 
   async getMetric(
