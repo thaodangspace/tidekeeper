@@ -1,6 +1,7 @@
 /** Daily context read service (ported from daily/). */
 
 import type { Voyage } from "../domain/types.ts";
+import { decodeAndValidateProjection } from "../domain/projection.ts";
 import { notFound, TidekeepersError } from "../utils/errors.ts";
 import type { DailyRepository } from "../repositories/daily_repository.ts";
 import type { VoyageRepository } from "../repositories/voyage_repository.ts";
@@ -169,7 +170,10 @@ export class DailyService {
       });
     }
 
-    const proj = view.projection as ProjectionV1;
+    const proj = decodeAndValidateProjection(
+      view.schemaVersion,
+      view.projection,
+    ) as unknown as ProjectionV1;
     return {
       serverNow: now.toISOString(),
       voyage: {
