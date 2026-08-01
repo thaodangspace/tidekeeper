@@ -118,7 +118,7 @@ export class CutoverError extends Error {
   }
 }
 
-/** Builds the same fail-closed plan as the legacy PostgreSQL cutover. */
+/** Builds a fail-closed plan for legacy projection cutover. */
 export function buildCutoverPlan(input: CutoverInput): CutoverPlan {
   validateParams(input);
   const sourceCatalog = input.sourceCatalog ??
