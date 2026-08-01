@@ -1,11 +1,11 @@
 -- name: GetContentRelease :one
-SELECT version, status, checksum, published_at, created_at
+SELECT version, status, checksum, checksum_schema_version, published_at, created_at
 FROM content_releases
 WHERE version = sqlc.arg(version);
 
 -- name: CreateDraftContentRelease :exec
-INSERT INTO content_releases (version, status, checksum)
-VALUES (sqlc.arg(version), 'DRAFT', sqlc.arg(checksum));
+INSERT INTO content_releases (version, status, checksum, checksum_schema_version)
+VALUES (sqlc.arg(version), 'DRAFT', sqlc.arg(checksum), sqlc.arg(checksum_schema_version));
 
 -- name: PublishContentRelease :exec
 UPDATE content_releases
@@ -111,3 +111,52 @@ SELECT
      FROM keeper_definition_upgrade_nodes AS n
      JOIN keeper_definition_versions AS k ON k.id = n.keeper_definition_version_id
      WHERE k.content_version = sqlc.arg(release_version))::bigint AS node_count;
+
+-- name: ListMarketAssets :many
+SELECT id, asset_key, symbol
+FROM market_assets
+ORDER BY asset_key;
+
+-- name: ListSectorDefinitionsForRelease :many
+SELECT id, sector_key, benchmark_method, minimum_eligible_baskets,
+       relative_scale_units, relative_blend_weight_units, rank_blend_weight_units, score_cap_units
+FROM sector_definition_versions
+WHERE content_version = sqlc.arg(content_version)
+ORDER BY sector_key;
+
+-- name: ListTurbulencePoliciesForRelease :many
+SELECT id, policy_key, policy_type, static_value_units, floor_units, rounding_mode
+FROM expected_turbulence_policies
+WHERE content_version = sqlc.arg(content_version)
+ORDER BY policy_key;
+
+-- name: ListBasketMappingsForRelease :many
+SELECT m.id, m.mapping_key,
+       COALESCE(s.sector_key, '') AS sector_key,
+       m.minimum_covered_weight_units,
+       COALESCE(t.policy_key, '') AS turbulence_policy_key,
+       m.normalization_cap_units,
+       m.benchmark_eligible
+FROM basket_mapping_versions AS m
+LEFT JOIN sector_definition_versions AS s ON s.id = m.sector_definition_version_id
+LEFT JOIN expected_turbulence_policies AS t ON t.id = m.expected_turbulence_policy_id
+WHERE m.content_version = sqlc.arg(content_version)
+ORDER BY m.mapping_key;
+
+-- name: ListBasketComponentsForRelease :many
+SELECT c.basket_mapping_version_id, m.mapping_key, a.asset_key, c.weight
+FROM basket_mapping_components AS c
+JOIN basket_mapping_versions AS m ON m.id = c.basket_mapping_version_id
+JOIN market_assets AS a ON a.id = c.market_asset_id
+WHERE m.content_version = sqlc.arg(content_version)
+ORDER BY m.mapping_key, a.asset_key;
+
+-- name: ListKeeperDefinitionsForRelease :many
+SELECT k.id, k.keeper_key, k.name, k.current_key, k.current_name,
+       k.sector_key, k.role_key, k.rarity_key, k.base_risk_key,
+       k.expected_turbulence_bps, k.passive_rule_key, k.passive_rule_config, k.upgrade_tree,
+       m.mapping_key AS basket_mapping_key
+FROM keeper_definition_versions AS k
+JOIN basket_mapping_versions AS m ON m.id = k.basket_mapping_version_id
+WHERE k.content_version = sqlc.arg(content_version)
+ORDER BY k.keeper_key;

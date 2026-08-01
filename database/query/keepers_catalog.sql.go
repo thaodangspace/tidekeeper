@@ -59,33 +59,44 @@ func (q *Queries) CountKeeperUpgradeNodesForRelease(ctx context.Context, release
 }
 
 const createDraftContentRelease = `-- name: CreateDraftContentRelease :exec
-INSERT INTO content_releases (version, status, checksum)
-VALUES ($1, 'DRAFT', $2)
+INSERT INTO content_releases (version, status, checksum, checksum_schema_version)
+VALUES ($1, 'DRAFT', $2, $3)
 `
 
 type CreateDraftContentReleaseParams struct {
-	Version  int64  `json:"version"`
-	Checksum []byte `json:"checksum"`
+	Version               int64  `json:"version"`
+	Checksum              []byte `json:"checksum"`
+	ChecksumSchemaVersion int16  `json:"checksum_schema_version"`
 }
 
 func (q *Queries) CreateDraftContentRelease(ctx context.Context, arg CreateDraftContentReleaseParams) error {
-	_, err := q.db.Exec(ctx, createDraftContentRelease, arg.Version, arg.Checksum)
+	_, err := q.db.Exec(ctx, createDraftContentRelease, arg.Version, arg.Checksum, arg.ChecksumSchemaVersion)
 	return err
 }
 
 const getContentRelease = `-- name: GetContentRelease :one
-SELECT version, status, checksum, published_at, created_at
+SELECT version, status, checksum, checksum_schema_version, published_at, created_at
 FROM content_releases
 WHERE version = $1
 `
 
-func (q *Queries) GetContentRelease(ctx context.Context, version int64) (ContentRelease, error) {
+type GetContentReleaseRow struct {
+	Version               int64              `json:"version"`
+	Status                string             `json:"status"`
+	Checksum              []byte             `json:"checksum"`
+	ChecksumSchemaVersion int16              `json:"checksum_schema_version"`
+	PublishedAt           pgtype.Timestamptz `json:"published_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetContentRelease(ctx context.Context, version int64) (GetContentReleaseRow, error) {
 	row := q.db.QueryRow(ctx, getContentRelease, version)
-	var i ContentRelease
+	var i GetContentReleaseRow
 	err := row.Scan(
 		&i.Version,
 		&i.Status,
 		&i.Checksum,
+		&i.ChecksumSchemaVersion,
 		&i.PublishedAt,
 		&i.CreatedAt,
 	)
@@ -343,6 +354,285 @@ func (q *Queries) InsertSectorDefinitionVersion(ctx context.Context, arg InsertS
 		arg.ScoreCapUnits,
 	)
 	return err
+}
+
+const listBasketComponentsForRelease = `-- name: ListBasketComponentsForRelease :many
+SELECT c.basket_mapping_version_id, m.mapping_key, a.asset_key, c.weight
+FROM basket_mapping_components AS c
+JOIN basket_mapping_versions AS m ON m.id = c.basket_mapping_version_id
+JOIN market_assets AS a ON a.id = c.market_asset_id
+WHERE m.content_version = $1
+ORDER BY m.mapping_key, a.asset_key
+`
+
+type ListBasketComponentsForReleaseRow struct {
+	BasketMappingVersionID pgtype.UUID    `json:"basket_mapping_version_id"`
+	MappingKey             string         `json:"mapping_key"`
+	AssetKey               string         `json:"asset_key"`
+	Weight                 pgtype.Numeric `json:"weight"`
+}
+
+func (q *Queries) ListBasketComponentsForRelease(ctx context.Context, contentVersion int64) ([]ListBasketComponentsForReleaseRow, error) {
+	rows, err := q.db.Query(ctx, listBasketComponentsForRelease, contentVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBasketComponentsForReleaseRow{}
+	for rows.Next() {
+		var i ListBasketComponentsForReleaseRow
+		if err := rows.Scan(
+			&i.BasketMappingVersionID,
+			&i.MappingKey,
+			&i.AssetKey,
+			&i.Weight,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBasketMappingsForRelease = `-- name: ListBasketMappingsForRelease :many
+SELECT m.id, m.mapping_key,
+       COALESCE(s.sector_key, '') AS sector_key,
+       m.minimum_covered_weight_units,
+       COALESCE(t.policy_key, '') AS turbulence_policy_key,
+       m.normalization_cap_units,
+       m.benchmark_eligible
+FROM basket_mapping_versions AS m
+LEFT JOIN sector_definition_versions AS s ON s.id = m.sector_definition_version_id
+LEFT JOIN expected_turbulence_policies AS t ON t.id = m.expected_turbulence_policy_id
+WHERE m.content_version = $1
+ORDER BY m.mapping_key
+`
+
+type ListBasketMappingsForReleaseRow struct {
+	ID                        pgtype.UUID `json:"id"`
+	MappingKey                string      `json:"mapping_key"`
+	SectorKey                 string      `json:"sector_key"`
+	MinimumCoveredWeightUnits *int64      `json:"minimum_covered_weight_units"`
+	TurbulencePolicyKey       string      `json:"turbulence_policy_key"`
+	NormalizationCapUnits     *int64      `json:"normalization_cap_units"`
+	BenchmarkEligible         *bool       `json:"benchmark_eligible"`
+}
+
+func (q *Queries) ListBasketMappingsForRelease(ctx context.Context, contentVersion int64) ([]ListBasketMappingsForReleaseRow, error) {
+	rows, err := q.db.Query(ctx, listBasketMappingsForRelease, contentVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBasketMappingsForReleaseRow{}
+	for rows.Next() {
+		var i ListBasketMappingsForReleaseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MappingKey,
+			&i.SectorKey,
+			&i.MinimumCoveredWeightUnits,
+			&i.TurbulencePolicyKey,
+			&i.NormalizationCapUnits,
+			&i.BenchmarkEligible,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listKeeperDefinitionsForRelease = `-- name: ListKeeperDefinitionsForRelease :many
+SELECT k.id, k.keeper_key, k.name, k.current_key, k.current_name,
+       k.sector_key, k.role_key, k.rarity_key, k.base_risk_key,
+       k.expected_turbulence_bps, k.passive_rule_key, k.passive_rule_config, k.upgrade_tree,
+       m.mapping_key AS basket_mapping_key
+FROM keeper_definition_versions AS k
+JOIN basket_mapping_versions AS m ON m.id = k.basket_mapping_version_id
+WHERE k.content_version = $1
+ORDER BY k.keeper_key
+`
+
+type ListKeeperDefinitionsForReleaseRow struct {
+	ID                    pgtype.UUID `json:"id"`
+	KeeperKey             string      `json:"keeper_key"`
+	Name                  string      `json:"name"`
+	CurrentKey            string      `json:"current_key"`
+	CurrentName           string      `json:"current_name"`
+	SectorKey             string      `json:"sector_key"`
+	RoleKey               string      `json:"role_key"`
+	RarityKey             string      `json:"rarity_key"`
+	BaseRiskKey           string      `json:"base_risk_key"`
+	ExpectedTurbulenceBps *int32      `json:"expected_turbulence_bps"`
+	PassiveRuleKey        string      `json:"passive_rule_key"`
+	PassiveRuleConfig     []byte      `json:"passive_rule_config"`
+	UpgradeTree           []byte      `json:"upgrade_tree"`
+	BasketMappingKey      string      `json:"basket_mapping_key"`
+}
+
+func (q *Queries) ListKeeperDefinitionsForRelease(ctx context.Context, contentVersion int64) ([]ListKeeperDefinitionsForReleaseRow, error) {
+	rows, err := q.db.Query(ctx, listKeeperDefinitionsForRelease, contentVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListKeeperDefinitionsForReleaseRow{}
+	for rows.Next() {
+		var i ListKeeperDefinitionsForReleaseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.KeeperKey,
+			&i.Name,
+			&i.CurrentKey,
+			&i.CurrentName,
+			&i.SectorKey,
+			&i.RoleKey,
+			&i.RarityKey,
+			&i.BaseRiskKey,
+			&i.ExpectedTurbulenceBps,
+			&i.PassiveRuleKey,
+			&i.PassiveRuleConfig,
+			&i.UpgradeTree,
+			&i.BasketMappingKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketAssets = `-- name: ListMarketAssets :many
+SELECT id, asset_key, symbol
+FROM market_assets
+ORDER BY asset_key
+`
+
+type ListMarketAssetsRow struct {
+	ID       pgtype.UUID `json:"id"`
+	AssetKey string      `json:"asset_key"`
+	Symbol   string      `json:"symbol"`
+}
+
+func (q *Queries) ListMarketAssets(ctx context.Context) ([]ListMarketAssetsRow, error) {
+	rows, err := q.db.Query(ctx, listMarketAssets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMarketAssetsRow{}
+	for rows.Next() {
+		var i ListMarketAssetsRow
+		if err := rows.Scan(&i.ID, &i.AssetKey, &i.Symbol); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSectorDefinitionsForRelease = `-- name: ListSectorDefinitionsForRelease :many
+SELECT id, sector_key, benchmark_method, minimum_eligible_baskets,
+       relative_scale_units, relative_blend_weight_units, rank_blend_weight_units, score_cap_units
+FROM sector_definition_versions
+WHERE content_version = $1
+ORDER BY sector_key
+`
+
+type ListSectorDefinitionsForReleaseRow struct {
+	ID                       pgtype.UUID `json:"id"`
+	SectorKey                string      `json:"sector_key"`
+	BenchmarkMethod          string      `json:"benchmark_method"`
+	MinimumEligibleBaskets   int32       `json:"minimum_eligible_baskets"`
+	RelativeScaleUnits       int64       `json:"relative_scale_units"`
+	RelativeBlendWeightUnits int64       `json:"relative_blend_weight_units"`
+	RankBlendWeightUnits     int64       `json:"rank_blend_weight_units"`
+	ScoreCapUnits            int64       `json:"score_cap_units"`
+}
+
+func (q *Queries) ListSectorDefinitionsForRelease(ctx context.Context, contentVersion int64) ([]ListSectorDefinitionsForReleaseRow, error) {
+	rows, err := q.db.Query(ctx, listSectorDefinitionsForRelease, contentVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSectorDefinitionsForReleaseRow{}
+	for rows.Next() {
+		var i ListSectorDefinitionsForReleaseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SectorKey,
+			&i.BenchmarkMethod,
+			&i.MinimumEligibleBaskets,
+			&i.RelativeScaleUnits,
+			&i.RelativeBlendWeightUnits,
+			&i.RankBlendWeightUnits,
+			&i.ScoreCapUnits,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTurbulencePoliciesForRelease = `-- name: ListTurbulencePoliciesForRelease :many
+SELECT id, policy_key, policy_type, static_value_units, floor_units, rounding_mode
+FROM expected_turbulence_policies
+WHERE content_version = $1
+ORDER BY policy_key
+`
+
+type ListTurbulencePoliciesForReleaseRow struct {
+	ID               pgtype.UUID `json:"id"`
+	PolicyKey        string      `json:"policy_key"`
+	PolicyType       string      `json:"policy_type"`
+	StaticValueUnits *int64      `json:"static_value_units"`
+	FloorUnits       int64       `json:"floor_units"`
+	RoundingMode     string      `json:"rounding_mode"`
+}
+
+func (q *Queries) ListTurbulencePoliciesForRelease(ctx context.Context, contentVersion int64) ([]ListTurbulencePoliciesForReleaseRow, error) {
+	rows, err := q.db.Query(ctx, listTurbulencePoliciesForRelease, contentVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTurbulencePoliciesForReleaseRow{}
+	for rows.Next() {
+		var i ListTurbulencePoliciesForReleaseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PolicyKey,
+			&i.PolicyType,
+			&i.StaticValueUnits,
+			&i.FloorUnits,
+			&i.RoundingMode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const publishContentRelease = `-- name: PublishContentRelease :exec

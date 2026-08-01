@@ -67,23 +67,58 @@ type BasketMetricComponent struct {
 }
 
 type ContentRelease struct {
-	Version     int64              `json:"version"`
-	Status      string             `json:"status"`
-	Checksum    []byte             `json:"checksum"`
-	PublishedAt pgtype.Timestamptz `json:"published_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Version               int64              `json:"version"`
+	Status                string             `json:"status"`
+	Checksum              []byte             `json:"checksum"`
+	PublishedAt           pgtype.Timestamptz `json:"published_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	ChecksumSchemaVersion int16              `json:"checksum_schema_version"`
+}
+
+type DailyModifierDefinitionVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	ModifierKey    string             `json:"modifier_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type DailyObjectiveDefinitionVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	ObjectiveKey   string             `json:"objective_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	ProgressLabel  *string            `json:"progress_label"`
+	RewardLabel    *string            `json:"reward_label"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type DailyTide struct {
-	ID             pgtype.UUID        `json:"id"`
-	DayKey         pgtype.Date        `json:"day_key"`
-	SequenceNumber int64              `json:"sequence_number"`
-	Phase          string             `json:"phase"`
-	LockAt         pgtype.Timestamptz `json:"lock_at"`
-	SettleAfter    pgtype.Timestamptz `json:"settle_after"`
-	ContentVersion int64              `json:"content_version"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID                           pgtype.UUID        `json:"id"`
+	DayKey                       pgtype.Date        `json:"day_key"`
+	SequenceNumber               int64              `json:"sequence_number"`
+	Phase                        string             `json:"phase"`
+	LockAt                       pgtype.Timestamptz `json:"lock_at"`
+	SettleAfter                  pgtype.Timestamptz `json:"settle_after"`
+	ContentVersion               int64              `json:"content_version"`
+	CreatedAt                    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                    pgtype.Timestamptz `json:"updated_at"`
+	ModifierDefinitionVersionID  pgtype.UUID        `json:"modifier_definition_version_id"`
+	ObjectiveDefinitionVersionID pgtype.UUID        `json:"objective_definition_version_id"`
+	GameRuleSetVersionID         pgtype.UUID        `json:"game_rule_set_version_id"`
+}
+
+type DailyTideStrategyVersion struct {
+	DailyTideID                 pgtype.UUID        `json:"daily_tide_id"`
+	StrategyDefinitionVersionID pgtype.UUID        `json:"strategy_definition_version_id"`
+	ContentVersion              int64              `json:"content_version"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
 }
 
 type ExpectedTurbulencePolicy struct {
@@ -95,6 +130,17 @@ type ExpectedTurbulencePolicy struct {
 	FloorUnits       int64              `json:"floor_units"`
 	RoundingMode     string             `json:"rounding_mode"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type GameRuleSetVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	RuleSetKey     string             `json:"rule_set_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type IdempotencyKey struct {
@@ -218,17 +264,18 @@ type PlayerDailyContextView struct {
 }
 
 type PlayerDailyState struct {
-	ID                 pgtype.UUID        `json:"id"`
-	PlayerID           pgtype.UUID        `json:"player_id"`
-	VoyageID           pgtype.UUID        `json:"voyage_id"`
-	DailyTideID        pgtype.UUID        `json:"daily_tide_id"`
-	DayNumber          int16              `json:"day_number"`
-	Phase              string             `json:"phase"`
-	Version            int64              `json:"version"`
-	SelectedStrategyID *string            `json:"selected_strategy_id"`
-	PendingRewardCount int32              `json:"pending_reward_count"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	ID                                  pgtype.UUID        `json:"id"`
+	PlayerID                            pgtype.UUID        `json:"player_id"`
+	VoyageID                            pgtype.UUID        `json:"voyage_id"`
+	DailyTideID                         pgtype.UUID        `json:"daily_tide_id"`
+	DayNumber                           int16              `json:"day_number"`
+	Phase                               string             `json:"phase"`
+	Version                             int64              `json:"version"`
+	SelectedStrategyID                  *string            `json:"selected_strategy_id"`
+	PendingRewardCount                  int32              `json:"pending_reward_count"`
+	CreatedAt                           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                           pgtype.Timestamptz `json:"updated_at"`
+	SelectedStrategyDefinitionVersionID pgtype.UUID        `json:"selected_strategy_definition_version_id"`
 }
 
 type PlayerKeeperUnlock struct {
@@ -239,6 +286,17 @@ type PlayerKeeperUnlock struct {
 	UnlockedAt                  pgtype.Timestamptz `json:"unlocked_at"`
 	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RelicDefinitionVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	RelicKey       string             `json:"relic_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Sector struct {
@@ -301,6 +359,31 @@ type Session struct {
 	RevokedAt           pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StrategyDefinitionVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	StrategyKey    string             `json:"strategy_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Upside         string             `json:"upside"`
+	Downside       string             `json:"downside"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type SynergyDefinitionVersion struct {
+	ID             pgtype.UUID        `json:"id"`
+	SynergyKey     string             `json:"synergy_key"`
+	ContentVersion int64              `json:"content_version"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	RequiredCount  int16              `json:"required_count"`
+	RuleKey        string             `json:"rule_key"`
+	RuleConfig     []byte             `json:"rule_config"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Voyage struct {

@@ -19,6 +19,15 @@ func Checksum(release CatalogRelease) ([sha256.Size]byte, error) {
 	return sha256.Sum256(encoded), nil
 }
 
+// CanonicalJSON returns the canonical schema-1 serialization of a catalog
+// release without validating it. Callers must validate the release before
+// relying on the output; the serialization is byte-identical to the payload
+// hashed by Checksum so schema-1 meaning is preserved for aggregate schema-2
+// checksums.
+func CanonicalJSON(release CatalogRelease) ([]byte, error) {
+	return canonicalReleaseJSON(release)
+}
+
 func canonicalReleaseJSON(release CatalogRelease) ([]byte, error) {
 	type canonicalComponent struct {
 		AssetKey string `json:"assetKey"`

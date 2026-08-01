@@ -36,3 +36,25 @@ func TestRunDoesNotEchoInvalidDatabaseURL(t *testing.T) {
 		t.Fatalf("stderr disclosed DATABASE_URL: %q", stderr.String())
 	}
 }
+
+func TestRunAcceptsBaselineRelease(t *testing.T) {
+	for _, release := range []string{"baseline-v1", "baseline-v2"} {
+		var stderr bytes.Buffer
+		if code := run([]string{"--release=" + release}, func(string) (string, bool) { return "", false }, &bytes.Buffer{}, &stderr); code != 1 {
+			t.Fatalf("run(%q) code = %d, want 1", release, code)
+		}
+		if stderr.String() != "DATABASE_URL is required\n" {
+			t.Fatalf("run(%q) stderr = %q", release, stderr.String())
+		}
+	}
+}
+
+func TestRunRejectsUnknownBaselineName(t *testing.T) {
+	var stderr bytes.Buffer
+	if code := run([]string{"--release=baseline-v3"}, func(string) (string, bool) { return "", false }, &bytes.Buffer{}, &stderr); code != 2 {
+		t.Fatalf("run() code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "baseline-v1") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}

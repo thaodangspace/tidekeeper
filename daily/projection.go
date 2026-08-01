@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -107,6 +108,67 @@ type v1Projection struct {
 	Strategies         []v1Strategy `json:"strategies"`
 	SelectedStrategyID *string      `json:"selectedStrategyId"`
 	PendingRewardCount int32        `json:"pendingRewardCount"`
+}
+
+// ProjectionIdentity captures the authoritative identity fields of a legacy
+// schema-1 projection: the Modifier and Objective, the available Strategy set,
+// and the per-player selected Strategy. Cutover uses it to recognize a
+// projection's source and resolve exact definition keys without depending on
+// presentation text.
+type ProjectionIdentity struct {
+	ModifierID         string
+	ModifierName       string
+	ObjectiveID        string
+	ObjectiveName      string
+	StrategyIDs        []string
+	SelectedStrategyID *string
+}
+
+// DecodeProjectionIdentity decodes and validates a legacy schema-1 projection
+// and returns its authoritative identity. Unsupported schemas, empty data, or
+// invalid projections fail closed so cutover never guesses from malformed text.
+func DecodeProjectionIdentity(schemaVersion int16, data []byte) (ProjectionIdentity, error) {
+	proj, err := decodeAndValidateSchemaV1Projection(schemaVersion, data)
+	if err != nil {
+		return ProjectionIdentity{}, err
+	}
+	strategyIDs := make([]string, 0, len(proj.Strategies))
+	for _, strategy := range proj.Strategies {
+		strategyIDs = append(strategyIDs, strategy.ID)
+	}
+	sort.Strings(strategyIDs)
+	var selectedStrategyID *string
+	if proj.SelectedStrategyID != nil && *proj.SelectedStrategyID != "" {
+		value := *proj.SelectedStrategyID
+		selectedStrategyID = &value
+	}
+	return ProjectionIdentity{
+		ModifierID:         proj.Modifier.ID,
+		ModifierName:       proj.Modifier.Name,
+		ObjectiveID:        proj.Objective.ID,
+		ObjectiveName:      proj.Objective.Name,
+		StrategyIDs:        strategyIDs,
+		SelectedStrategyID: selectedStrategyID,
+	}, nil
+}
+
+// Compatible reports whether two projections share the same authoritative
+// Modifier, Objective, and available Strategy set. The per-player selection is
+// deliberately ignored: different players on the same Tide may select different
+// available Strategies without contradicting one another.
+func (p ProjectionIdentity) Compatible(other ProjectionIdentity) bool {
+	if p.ModifierID != other.ModifierID || p.ObjectiveID != other.ObjectiveID {
+		return false
+	}
+	if len(p.StrategyIDs) != len(other.StrategyIDs) {
+		return false
+	}
+	for index := range p.StrategyIDs {
+		if p.StrategyIDs[index] != other.StrategyIDs[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func decodeAndValidateSchemaV1Projection(schemaVersion int16, data []byte) (v1Projection, error) {

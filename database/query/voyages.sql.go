@@ -224,9 +224,21 @@ WHERE day_key = $1
 LIMIT 1
 `
 
-func (q *Queries) GetOpenDailyTide(ctx context.Context, dayKey pgtype.Date) (DailyTide, error) {
+type GetOpenDailyTideRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	DayKey         pgtype.Date        `json:"day_key"`
+	SequenceNumber int64              `json:"sequence_number"`
+	Phase          string             `json:"phase"`
+	LockAt         pgtype.Timestamptz `json:"lock_at"`
+	SettleAfter    pgtype.Timestamptz `json:"settle_after"`
+	ContentVersion int64              `json:"content_version"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetOpenDailyTide(ctx context.Context, dayKey pgtype.Date) (GetOpenDailyTideRow, error) {
 	row := q.db.QueryRow(ctx, getOpenDailyTide, dayKey)
-	var i DailyTide
+	var i GetOpenDailyTideRow
 	err := row.Scan(
 		&i.ID,
 		&i.DayKey,
