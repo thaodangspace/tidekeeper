@@ -19,7 +19,7 @@ export interface LogFields {
   [key: string]: unknown;
 }
 
-class Logger {
+export class Logger {
   #level: LogLevel;
   #output: Pick<Console, "log" | "error">;
   #baseFields: LogFields;
