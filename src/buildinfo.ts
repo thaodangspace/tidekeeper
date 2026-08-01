@@ -1,4 +1,4 @@
-/** Build metadata equivalent to the Go buildinfo package. */
+/** Build metadata exposed by the Deno service. */
 
 export interface BuildInfo {
   version: string;

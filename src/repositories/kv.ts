@@ -1,7 +1,7 @@
 /**
  * Deno KV storage wrapper and key helpers.
  *
- * The PostgreSQL relational layout is mapped onto hierarchical KV keys:
+ * Domain records are mapped onto hierarchical KV keys:
  *   ["account_email", email]      -> Account
  *   ["account", id]               -> Account
  *   ["player", id]                -> Player
