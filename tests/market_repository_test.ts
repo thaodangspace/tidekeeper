@@ -107,6 +107,29 @@ Deno.test("market repository: benchmark evidence is persisted by tide and defini
     const readiness = await repository.loadReadiness("tide-1", [definition]);
     assertEquals(readiness.ready, false);
     assertEquals(readiness.sectors.length, 4);
+    assertEquals(
+      (await repository.getBenchmark("tide-1", definition.id))?.id,
+      result.id,
+    );
+
+    const scoreId = await repository.persistKeeperScore({
+      dailyTideId: "tide-1",
+      keeperDefinitionId: "keeper-1",
+      basketMetricId: "metric-1",
+      sectorBenchmarkId: result.id,
+      percentile: 500_000,
+      score: {
+        relativePerformance: 10,
+        relativeComponent: 20,
+        rankComponent: 0,
+        normalizedScore: 14,
+        scorePoints: 1,
+      },
+    });
+    assertEquals(
+      (await repository.getKeeperScore("tide-1", "keeper-1"))?.id,
+      scoreId,
+    );
   } finally {
     kv.close();
   }

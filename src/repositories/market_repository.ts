@@ -186,6 +186,24 @@ export class MarketRepository {
     return record.id;
   }
 
+  async getBenchmark(
+    dailyTideId: string,
+    definitionId: string,
+  ): Promise<SectorBenchmarkRecord | null> {
+    return this.#store.get<SectorBenchmarkRecord>(
+      benchmarkKey(dailyTideId, definitionId),
+    );
+  }
+
+  async getKeeperScore(
+    dailyTideId: string,
+    keeperDefinitionId: string,
+  ): Promise<KeeperSectorScore | null> {
+    return this.#store.get<KeeperSectorScore>(
+      keeperScoreKey(dailyTideId, keeperDefinitionId),
+    );
+  }
+
   async loadReadiness(
     dailyTideId: string,
     definitions: Definition[],
