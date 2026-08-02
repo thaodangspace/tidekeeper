@@ -3,15 +3,12 @@
 .env.*
 !.env.example
 
-# Go build and local harness caches
+# Local caches and generated CLI artifacts
 .cache/
 bin/
 /content-publish
 coverage.out
 *.test
-
-# Local database volumes
-.postgres-data/
 
 # Editor and OS files
 .DS_Store

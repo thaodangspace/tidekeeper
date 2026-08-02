@@ -662,7 +662,7 @@ paths:
       tags: [Health]
       summary: Check service readiness
       description: |
-        Verifies required configuration and a bounded PostgreSQL ping. It never
+        Verifies required configuration and the Deno KV service state. It never
         exposes DSNs, credentials, schema details, or stack traces.
       security: []
       responses:
@@ -1295,7 +1295,7 @@ components:
         serverNow:
           allOf:
             - $ref: '#/components/schemas/UtcTimestamp'
-          description: Authoritative PostgreSQL transaction time, or the equivalent test-injected clock value, in UTC.
+          description: Authoritative server time, or the equivalent test-injected clock value, in UTC.
         voyage:
           $ref: '#/components/schemas/VoyageSummary'
         daily:
