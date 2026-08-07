@@ -284,7 +284,7 @@ Feature folders may own domain-specific components, action helpers and tests. Ge
 | Route | Purpose | Access |
 |---|---|---|
 | `/` | Public landing or redirect to active game | Public |
-| `/login` | Login and account creation | Public |
+| `/login` | Enter or resume a guest player name | Public |
 | `/onboarding` | Explain daily loop and start first Voyage | Authenticated, first use |
 | `/play` | Daily state router and primary dashboard | Authenticated |
 | `/play/prepare` | Fleet, shop, Signals and Strategy | `PREPARATION` |
@@ -387,14 +387,19 @@ All timestamps are ISO 8601 strings in UTC. Formatting into the user's locale oc
 ### Required elements
 
 - Tidekeepers logo and short promise.
-- Email login or configured identity provider.
+- One display-name field and an `Enter Tidekeepers` CTA.
 - Clear loading and error states.
 - Links to terms, privacy and gameplay disclaimer.
 
+The form posts `{ username }` to `POST /auth/session`. The API creates or
+resumes a guest player from the normalized name and trusted connection IP, then
+sets the opaque HttpOnly session cookie.
+
 ### Acceptance criteria
 
-- Existing sessions skip login.
-- An expired session returns the player to login without losing server state.
+- Existing sessions skip the name-entry screen.
+- An expired session returns the player to name entry without losing server state.
+- Equivalent names normalize to the same guest player from the same IP.
 - Errors never expose raw backend messages or stack traces.
 
 ---
@@ -1185,7 +1190,7 @@ A merge to the release branch requires:
 
 The frontend MVP is complete when:
 
-1. A new player can register, complete onboarding and start a Voyage.
+1. A new player can enter a name, complete onboarding and start a Voyage.
 2. The current daily phase always routes to the correct screen.
 3. The player can inspect Signals, Modifier and Objective.
 4. The player can recruit Keepers, manage the Fleet and select a Strategy.
@@ -1194,7 +1199,7 @@ The frontend MVP is complete when:
 7. The player can return later and view a result with an understandable breakdown.
 8. The player can claim exactly one reward and continue.
 9. The seven-day Voyage can complete or fail with a summary.
-10. Refreshing or changing devices does not lose confirmed progress.
+10. Refreshing or re-entering from the same effective IP does not lose confirmed progress.
 11. The primary flow is usable on desktop and mobile.
 12. The primary flow is usable with keyboard and reduced motion.
 13. Errors provide recovery and never expose sensitive implementation details.

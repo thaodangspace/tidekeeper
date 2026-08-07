@@ -63,8 +63,7 @@ export function buildRouter(deps: RouterDeps): Hono {
   const shop = new ShopHandler(deps.shop);
   const settlement = new SettlementHandler(deps.settlement);
 
-  app.post("/auth/register", auth.register);
-  app.post("/auth/login", auth.login);
+  app.post("/auth/session", auth.session);
   app.get("/health/live", health.live);
   app.get("/health/ready", health.readyHandler);
 

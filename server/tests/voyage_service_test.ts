@@ -28,8 +28,9 @@ async function setup(): Promise<TestHarness> {
   const playerId = newId();
   const player: Player = {
     id: playerId,
-    accountId: newId(),
     publicId: "plr_test",
+    displayName: "Test Player",
+    username: "test_player",
     onboardingCompleted: false,
     locale: "en-US",
     timezone: "UTC",
@@ -249,8 +250,9 @@ Deno.test("voyage: create without a daily tide is unavailable", async () => {
     const playerId = newId();
     await store.set(playerKey(playerId), {
       id: playerId,
-      accountId: newId(),
       publicId: "plr_test",
+      displayName: "Test Player",
+      username: "test_player",
       onboardingCompleted: false,
       locale: "en-US",
       timezone: "UTC",

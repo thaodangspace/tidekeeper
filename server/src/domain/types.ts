@@ -2,19 +2,11 @@
 
 export type VoyageStatus = "ACTIVE" | "COMPLETED" | "FAILED" | "ABANDONED";
 
-export interface Account {
-  id: string;
-  email: string;
-  passwordHash: string;
-  status: "ACTIVE" | "DISABLED";
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface Player {
   id: string;
-  accountId: string;
   publicId: string;
+  displayName: string;
+  username: string;
   onboardingCompleted: boolean;
   locale: string;
   timezone: string;
@@ -25,7 +17,6 @@ export interface Player {
 
 export interface Session {
   id: string;
-  accountId: string;
   playerId: string;
   /** Hex-encoded SHA-256 digest of the raw token. */
   tokenDigest: string;
@@ -221,6 +212,5 @@ export interface IdempotencyKeyRecord {
 
 /** Authenticated principal attached to a request context. */
 export interface Principal {
-  accountId: string;
   playerId: string;
 }

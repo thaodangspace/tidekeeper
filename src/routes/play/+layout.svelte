@@ -27,7 +27,7 @@
   <main class="session-status" aria-busy="true">Restoring your voyage…</main>
 {:else if unavailable}
   <main class="session-status" role="alert">
-    Account service is unavailable. Please try again shortly.
+    Tidekeepers is unavailable. Please try again shortly.
   </main>
 {:else}
   {@render children()}
