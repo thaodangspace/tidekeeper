@@ -45,5 +45,5 @@ deno task test
 ```
 
 Cutover planner, KV persistence, idempotency, concurrency checks, CLI parsing,
-and report formatting are covered by `tests/cutover*_test.ts` and
-`tests/content_cutover_cli_test.ts`.
+and report formatting are covered by `server/tests/cutover*_test.ts` and
+`server/tests/content_cutover_cli_test.ts`.

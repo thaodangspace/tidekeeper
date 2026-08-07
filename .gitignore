@@ -3,8 +3,12 @@
 .env.*
 !.env.example
 
-# Local caches and generated CLI artifacts
+# Local caches and generated artifacts
 .cache/
+.npm-cache/
+.svelte-kit/
+build/
+node_modules/
 bin/
 /content-publish
 coverage.out

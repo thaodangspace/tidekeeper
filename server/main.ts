@@ -109,11 +109,96 @@ Deno.cron("session cleanup", "0 * * * *", async () => {
 const url = parseAddress(config.http.address);
 logger.info("api starting", { address: config.http.address });
 
-const handler = (request: Request) => app.fetch(request, Deno.env);
+const handler = async (request: Request): Promise<Response> => {
+  const pathname = new URL(request.url).pathname;
+  if (isApiPath(pathname)) {
+    return app.fetch(request, Deno.env);
+  }
+  return serveFrontend(request);
+};
 Deno.serve(
   { hostname: url.hostname, port: url.port, onListen: () => {} },
   handler,
 );
+
+const frontendRoot = new URL("../build/", import.meta.url);
+
+function isApiPath(pathname: string): boolean {
+  return ["/api", "/auth", "/health"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+async function serveFrontend(request: Request): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { Allow: "GET, HEAD" },
+    });
+  }
+
+  const url = new URL(request.url);
+  const fileUrl = frontendFileUrl(url.pathname);
+  if (!fileUrl) return new Response("Bad Request", { status: 400 });
+
+  try {
+    const body = await Deno.readFile(fileUrl);
+    const headers = new Headers({
+      "Content-Type": contentType(fileUrl.pathname),
+      "Cache-Control": url.pathname.startsWith("/_app/immutable/")
+        ? "public, max-age=31536000, immutable"
+        : "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy":
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    });
+    return new Response(request.method === "HEAD" ? null : body, { headers });
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      return new Response("Not Found", { status: 404 });
+    }
+    throw error;
+  }
+}
+
+function frontendFileUrl(pathname: string): URL | null {
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const segments = decodedPath.split("/");
+  if (segments.includes("..")) return null;
+
+  const normalized = decodedPath.replace(/^\/+/, "");
+  const candidate = normalized === "" || normalized.endsWith("/")
+    ? `${normalized}index.html`
+    : normalized.includes(".")
+    ? normalized
+    : `${normalized}/index.html`;
+  return new URL(candidate, frontendRoot);
+}
+
+function contentType(pathname: string): string {
+  const extension = pathname.slice(pathname.lastIndexOf(".")).toLowerCase();
+  return ({
+    ".css": "text/css; charset=utf-8",
+    ".gif": "image/gif",
+    ".html": "text/html; charset=utf-8",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+  } as Record<string, string>)[extension] ?? "application/octet-stream";
+}
 
 function parseAddress(address: string): { hostname: string; port: number } {
   const trimmed = address.trim();
