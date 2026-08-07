@@ -1,0 +1,29 @@
+{
+  "name": "tidekeepers",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "npm run build && deno task start",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "api:dev": "deno task dev",
+    "api:start": "deno task start",
+    "api:check": "deno task check",
+    "api:test": "deno task test"
+  },
+  "devDependencies": {
+    "@fontsource/cinzel": "^5.2.7",
+    "@fontsource/cormorant-garamond": "^5.2.7",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.48.5",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "svelte": "^5.46.1",
+    "svelte-check": "^4.3.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

@@ -15,7 +15,12 @@ import type {
   AdvanceResponse,
   SettlementService,
 } from "../services/settlement_service.ts";
-import { statusCodeFor, TidekeepersError } from "../utils/errors.ts";
+import {
+  badRequest,
+  notFound,
+  statusCodeFor,
+  TidekeepersError,
+} from "../utils/errors.ts";
 import {
   apiError,
   decodeJsonBody,
@@ -209,10 +214,9 @@ export class VoyageHandler {
     if (idempotencyKey === "") {
       return this.#writeError(
         c,
-        {
-          kind: "invalid_request",
+        badRequest("invalid idempotency key", {
           code: "INVALID_IDEMPOTENCY_KEY",
-        } as TidekeepersError,
+        }),
       );
     }
     try {
@@ -251,7 +255,7 @@ export class VoyageHandler {
     if (voyageId === "") {
       return this.#writeError(
         c,
-        { kind: "not_found", code: "VOYAGE_NOT_FOUND" } as TidekeepersError,
+        notFound("voyage not found", { code: "VOYAGE_NOT_FOUND" }),
       );
     }
     try {
@@ -272,17 +276,16 @@ export class VoyageHandler {
     if (voyageId === "") {
       return this.#writeError(
         c,
-        { kind: "not_found", code: "VOYAGE_NOT_FOUND" } as TidekeepersError,
+        notFound("voyage not found", { code: "VOYAGE_NOT_FOUND" }),
       );
     }
     const idempotencyKey = c.req.header("Idempotency-Key") ?? "";
     if (idempotencyKey === "") {
       return this.#writeError(
         c,
-        {
-          kind: "invalid_request",
+        badRequest("invalid idempotency key", {
           code: "INVALID_IDEMPOTENCY_KEY",
-        } as TidekeepersError,
+        }),
       );
     }
     try {
@@ -308,7 +311,7 @@ export class VoyageHandler {
     if (voyageId === "") {
       return this.#writeError(
         c,
-        { kind: "not_found", code: "VOYAGE_NOT_FOUND" } as TidekeepersError,
+        notFound("voyage not found", { code: "VOYAGE_NOT_FOUND" }),
       );
     }
     try {

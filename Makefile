@@ -16,7 +16,7 @@ test:
 	deno task test
 
 build:
-	deno check --unstable-kv --unstable-cron main.ts
+	deno check --unstable-kv --unstable-cron server/main.ts
 
 start:
 	deno task start

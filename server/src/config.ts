@@ -161,7 +161,11 @@ export function loadConfig(
   return {
     environment: environment as Environment,
     http: {
-      address: value(lookup, "HTTP_ADDR", ":8080"),
+      address: value(
+        lookup,
+        "HTTP_ADDR",
+        `:${value(lookup, "PORT", "8000")}`,
+      ),
       readTimeoutMs: integer(lookup, "HTTP_READ_TIMEOUT_MS", 10_000),
       writeTimeoutMs: integer(lookup, "HTTP_WRITE_TIMEOUT_MS", 15_000),
       shutdownTimeoutMs: integer(lookup, "HTTP_SHUTDOWN_TIMEOUT_MS", 15_000),

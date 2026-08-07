@@ -1,4 +1,4 @@
-name: Deno
+name: Tidekeepers
 
 on:
   push:
@@ -16,3 +16,10 @@ jobs:
       - run: deno task lint
       - run: deno task check
       - run: deno task test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
