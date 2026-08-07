@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import KeeperCard from '$lib/components/KeeperCard.svelte';
+  import GameBoard from '$lib/game/board/GameBoard.svelte';
   import { asKeeper, getMyKeepers, PlayerKeepersRequestError } from '$lib/keepers';
   import { fleet, initialOffers, type Keeper, type Offer } from '$lib/data';
 
@@ -12,6 +13,7 @@
   let lockOpen = false;
   let locked = false;
   let offers: Offer[] = [...initialOffers];
+  let fleetSlots: (Keeper | null)[] = [...fleet, null];
   let owned: Keeper[] = [];
   let inventoryLoading = true;
   let inventoryUnavailable = false;
@@ -44,6 +46,37 @@
     } finally {
       inventoryLoading = false;
     }
+  }
+
+  const boardKeepers = () => fleetSlots.flatMap((keeper, slotIndex) => keeper ? [{
+    id: keeper.id,
+    name: keeper.name,
+    image: keeper.image,
+    sector: keeper.affinity.toUpperCase(),
+    role: keeper.role,
+    slotIndex
+  }] : []);
+
+  const activeSynergies = [
+    { id: 'crest-formation', keeperIds: ['crest-guardian', 'harbor-warden'], label: 'Crest II', type: 'crest' },
+    { id: 'diverse-formation', keeperIds: fleet.slice(0, 3).map((keeper) => keeper.id), label: 'Đội hình đa dạng', type: 'current' }
+  ];
+
+  function moveKeeper(keeperId: string, targetSlot: number) {
+    if (locked || targetSlot < 0 || targetSlot >= fleetSlots.length) return;
+    const sourceSlot = fleetSlots.findIndex((keeper) => keeper?.id === keeperId);
+    if (sourceSlot < 0 || sourceSlot === targetSlot) return;
+
+    const nextSlots = [...fleetSlots];
+    [nextSlots[sourceSlot], nextSlots[targetSlot]] = [nextSlots[targetSlot], nextSlots[sourceSlot]];
+    fleetSlots = nextSlots;
+    selectedKeeper = keeperId;
+    notice = 'Đã cập nhật vị trí Keeper.';
+    window.setTimeout(() => notice = '', 2600);
+  }
+
+  function selectEmptySlot(slotIndex: number) {
+    if (selectedKeeper && !locked) moveKeeper(selectedKeeper, slotIndex);
   }
 
   function recruit(_offer: Offer) {
@@ -105,14 +138,17 @@
 
       <section class="panel fleet-panel ornamental">
         <h2><span>ĐỘI HÌNH CỦA BẠN</span></h2>
-        <div class="fleet-grid">
-          {#each fleet as keeper}
-            <KeeperCard {keeper} selected={selectedKeeper === keeper.id} onclick={() => selectedKeeper = keeper.id} />
-          {/each}
-          <button class="empty-slot" type="button" aria-label="Thêm Keeper vào ô trống">
-            <span>＋</span><small>Trống</small>
-          </button>
-        </div>
+        <GameBoard
+          keepers={boardKeepers()}
+          maxSlots={5}
+          selectedKeeperId={selectedKeeper || null}
+          {locked}
+          activeSynergies={activeSynergies}
+          tideState="CALM"
+          onKeeperSelect={(keeperId) => selectedKeeper = keeperId}
+          onKeeperMove={moveKeeper}
+          onEmptySlotSelect={selectEmptySlot}
+        />
         <div class="synergy-bar">
           <div class="synergy-group"><span class="eyebrow">SYNERGY ĐANG KÍCH HOẠT</span><div><button>♜ &nbsp; Crest II</button><button>♟ &nbsp; Đội hình đa dạng</button></div></div>
           <div class="synergy-group pending"><span class="eyebrow">SẮP KÍCH HOẠT</span><button>≋ &nbsp; Balanced Current 3/4</button></div>
