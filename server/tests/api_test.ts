@@ -39,6 +39,8 @@ const config: Config = {
   lockTime: "23:55",
   contentVersion: 1,
   market: { provider: "static", apiKey: "" },
+  playerIdSecret: "test-player-id-secret",
+  proxy: { trusted: false, header: "x-forwarded-for" },
 };
 
 const base = "http://tidekeepers.test";
@@ -93,15 +95,13 @@ async function setup(): Promise<ApiHarness> {
 
 async function register(
   app: ReturnType<typeof buildRouter>,
+  username = "Thao Dang",
 ): Promise<string> {
-  const res = await app.request(`${base}/auth/register`, {
+  const res = await app.request(`${base}/auth/session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: "player@example.com",
-      password: "password-123",
-    }),
-  });
+    body: JSON.stringify({ username }),
+  }, { clientIp: "192.0.2.1" });
   assertStrictEquals(res.status, 201);
   const setCookie = res.headers.get("set-cookie") ?? "";
   const match = /tidekeepers_session=([^;]+)/.exec(setCookie);
@@ -154,46 +154,45 @@ Deno.test("api: protected route without cookie is unauthorized", async () => {
   }
 });
 
-Deno.test("api: login verifies and issues a session", async () => {
+Deno.test("api: repeated name/IP resumes the player with a fresh session", async () => {
   const h = await setup();
   try {
-    await register(h.app);
-    const login = await h.app.request(`${base}/auth/login`, {
+    const firstCookie = await register(h.app);
+    const resumed = await h.app.request(`${base}/auth/session`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email: "PLAYER@example.com",
-        password: "password-123",
-      }),
-    });
-    assertStrictEquals(login.status, 204);
-    const cookie = /tidekeepers_session=([^;]+)/.exec(
-      login.headers.get("set-cookie") ?? "",
+      body: JSON.stringify({ username: "  thao   dang " }),
+    }, { clientIp: "192.0.2.1" });
+    assertStrictEquals(resumed.status, 204);
+    const secondCookie = /tidekeepers_session=([^;]+)/.exec(
+      resumed.headers.get("set-cookie") ?? "",
     )![1]!;
-    const me = await h.app.request(`${base}/api/v1/me`, {
-      headers: { cookie: `tidekeepers_session=${cookie}` },
+    const firstMe = await h.app.request(`${base}/api/v1/me`, {
+      headers: { cookie: `tidekeepers_session=${firstCookie}` },
     });
-    assertStrictEquals(me.status, 200);
+    const secondMe = await h.app.request(`${base}/api/v1/me`, {
+      headers: { cookie: `tidekeepers_session=${secondCookie}` },
+    });
+    assertStrictEquals(
+      (await json(firstMe)).playerId,
+      (await json(secondMe)).playerId,
+    );
   } finally {
     h.kv.close();
   }
 });
 
-Deno.test("api: duplicate registration conflicts", async () => {
+Deno.test("api: removed account endpoints are not exposed", async () => {
   const h = await setup();
   try {
-    await register(h.app);
-    const res = await h.app.request(`${base}/auth/register`, {
+    const registerResponse = await h.app.request(`${base}/auth/register`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email: "player@example.com",
-        password: "other-password",
-      }),
     });
-    assertStrictEquals(res.status, 409);
-    const body = await json(res);
-    assertStrictEquals(body.code, "EMAIL_ALREADY_REGISTERED");
+    const loginResponse = await h.app.request(`${base}/auth/login`, {
+      method: "POST",
+    });
+    assertStrictEquals(registerResponse.status, 404);
+    assertStrictEquals(loginResponse.status, 404);
   } finally {
     h.kv.close();
   }

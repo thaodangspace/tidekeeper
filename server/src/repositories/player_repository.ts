@@ -17,6 +17,8 @@ export class PlayerRepository {
   async getPlayerMe(id: string): Promise<
     {
       publicId: string;
+      displayName: string;
+      username: string;
       onboardingCompleted: boolean;
       locale: string;
       timezone: string;
@@ -36,6 +38,8 @@ export class PlayerRepository {
     }
     return {
       publicId: player.publicId,
+      displayName: player.displayName,
+      username: player.username,
       onboardingCompleted: player.onboardingCompleted,
       locale: player.locale,
       timezone: player.timezone,

@@ -3,7 +3,7 @@ info:
   title: Tidekeepers API
   version: 1.0.0
   description: |
-    Contract for first-party account authentication, authenticated player identity,
+    Contract for username-based guest session bootstrap, authenticated player identity,
     and canonical daily Voyage context. Public timestamps are RFC 3339 values
     normalized to UTC and ending in `Z`. Read operations never infer or advance
     a player's materialized daily phase.
@@ -12,7 +12,7 @@ servers:
     description: Same origin as the deployed API service.
 tags:
   - name: Auth
-    description: Public account registration and sign-in.
+    description: Public guest player session bootstrap.
   - name: Player
     description: Authenticated player identity reads.
   - name: Voyage
@@ -20,22 +20,22 @@ tags:
   - name: Health
     description: Unauthenticated process and dependency health checks.
 paths:
-  /auth/register:
+  /auth/session:
     post:
-      operationId: register
+      operationId: createOrResumeSession
       tags: [Auth]
-      summary: Register an account
-      description: Creates an email/password account, its player profile, and an authenticated session.
+      summary: Create or resume a guest player session
+      description: Creates or resumes a player from the display name and trusted server connection IP, then issues an opaque HttpOnly session cookie.
       security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CredentialsRequest'
+              $ref: '#/components/schemas/SessionRequest'
       responses:
         '201':
-          description: Account created and session cookie issued.
+          description: New player created and session cookie issued.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestID'
@@ -43,28 +43,8 @@ paths:
               $ref: '#/components/headers/AuthNoStore'
             Set-Cookie:
               $ref: '#/components/headers/SessionCookie'
-        '400':
-          $ref: '#/components/responses/InvalidAuthInput'
-        '409':
-          $ref: '#/components/responses/EmailAlreadyRegistered'
-        '500':
-          $ref: '#/components/responses/InternalErrorAuth'
-  /auth/login:
-    post:
-      operationId: login
-      tags: [Auth]
-      summary: Sign in to an existing account
-      description: Verifies an email/password credential pair and issues a new authenticated session.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CredentialsRequest'
-      responses:
         '204':
-          description: Credentials accepted and session cookie issued.
+          description: Existing player resumed and a new session cookie issued.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestID'
@@ -73,11 +53,9 @@ paths:
             Set-Cookie:
               $ref: '#/components/headers/SessionCookie'
         '400':
-          $ref: '#/components/responses/InvalidAuthInput'
-        '401':
-          $ref: '#/components/responses/InvalidCredentials'
-        '500':
-          $ref: '#/components/responses/InternalErrorAuth'
+          $ref: '#/components/responses/InvalidPlayerName'
+        '503':
+          $ref: '#/components/responses/ClientIpUnavailable'
   /api/v1/me:
     get:
       operationId: getMe
@@ -103,6 +81,8 @@ paths:
                 $ref: '#/components/schemas/MeResponse'
               example:
                 playerId: plr_123
+                displayName: Thao Dang
+                username: thao_dang
                 onboardingCompleted: true
                 locale: en
                 timezone: UTC
@@ -815,8 +795,8 @@ components:
             code: VOYAGE_NOT_FOUND
             message: Voyage not found.
             requestId: req_123
-    InvalidAuthInput:
-      description: The JSON body, email address, or password did not meet the public input policy.
+    InvalidPlayerName:
+      description: The display name is outside the two-to-32 character policy.
       headers:
         X-Request-ID:
           $ref: '#/components/headers/XRequestID'
@@ -827,11 +807,11 @@ components:
           schema:
             $ref: '#/components/schemas/ApiError'
           example:
-            code: INVALID_AUTH_INPUT
-            message: Enter a valid email and password.
+            code: INVALID_PLAYER_NAME
+            message: Enter a name between 2 and 32 characters.
             requestId: req_123
-    EmailAlreadyRegistered:
-      description: An account has already registered the supplied normalized email address.
+    ClientIpUnavailable:
+      description: The server could not determine a trusted connection address.
       headers:
         X-Request-ID:
           $ref: '#/components/headers/XRequestID'
@@ -842,23 +822,8 @@ components:
           schema:
             $ref: '#/components/schemas/ApiError'
           example:
-            code: EMAIL_ALREADY_REGISTERED
-            message: An account already exists for this email address.
-            requestId: req_123
-    InvalidCredentials:
-      description: Credentials were not accepted. This deliberately does not reveal whether the email exists.
-      headers:
-        X-Request-ID:
-          $ref: '#/components/headers/XRequestID'
-        Cache-Control:
-          $ref: '#/components/headers/AuthNoStore'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ApiError'
-          example:
-            code: INVALID_CREDENTIALS
-            message: Invalid email or password.
+            code: CLIENT_IP_UNAVAILABLE
+            message: Player identity is temporarily unavailable.
             requestId: req_123
     InternalErrorAuth:
       description: An unexpected authentication failure occurred.
@@ -951,22 +916,16 @@ components:
             message: The service is temporarily unavailable.
             requestId: req_123
   schemas:
-    CredentialsRequest:
+    SessionRequest:
       type: object
       additionalProperties: false
-      required: [email, password]
+      required: [username]
       properties:
-        email:
+        username:
           type: string
-          minLength: 3
-          maxLength: 254
-          description: Email address, normalized by the server before persistence.
-        password:
-          type: string
-          format: password
-          minLength: 8
-          maxLength: 128
-          description: First-party account password. It is never returned or logged.
+          minLength: 2
+          maxLength: 32
+          description: Display name, normalized by the server to snake_case for guest identity.
     PublicID:
       type: string
       minLength: 1
@@ -996,6 +955,8 @@ components:
       additionalProperties: false
       required:
         - playerId
+        - displayName
+        - username
         - onboardingCompleted
         - locale
         - timezone
@@ -1003,6 +964,15 @@ components:
       properties:
         playerId:
           $ref: '#/components/schemas/PublicID'
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 32
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[^_].*[^_]$|^[^_]$'
         onboardingCompleted:
           type: boolean
         locale:
@@ -1714,9 +1684,8 @@ components:
         code:
           type: string
           enum:
-            - INVALID_AUTH_INPUT
-            - EMAIL_ALREADY_REGISTERED
-            - INVALID_CREDENTIALS
+            - INVALID_PLAYER_NAME
+            - CLIENT_IP_UNAVAILABLE
             - AUTH_REQUIRED
             - SESSION_EXPIRED
             - NO_ACTIVE_VOYAGE

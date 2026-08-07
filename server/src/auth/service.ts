@@ -1,64 +1,74 @@
-/** Account registration, login, and session issuance (ported from auth/service.go). */
+/** Username/IP guest identity bootstrap and opaque session issuance. */
 
-import type { Account, Player, Principal } from "../domain/types.ts";
-import { conflict, TidekeepersError } from "../utils/errors.ts";
+import type { Player, Principal, Session } from "../domain/types.ts";
+import { internal } from "../utils/errors.ts";
 import { base64UrlEncodeBytes } from "../utils/crypto.ts";
 import { newId } from "../utils/ids.ts";
 import { digestToken, newToken } from "./session.ts";
 import {
-  hashPassword,
-  invalidCredentials,
-  minPasswordLength,
-  verifyPassword,
-} from "./password.ts";
+  derivePlayerId,
+  normalizeClientIp,
+  normalizeUsername,
+} from "./identity.ts";
 import type { AuthRepository } from "../repositories/auth_repository.ts";
-
-const maxEmailLength = 254;
 
 export interface IssuedSession {
   token: string;
   expiresAt: Date;
+  created: boolean;
+  playerId: string;
 }
 
 export class AuthService {
   #sessions: AuthRepository;
   #sessionTTL: number;
+  #playerIdSecret: string;
 
-  constructor(sessions: AuthRepository, sessionTTLMs: number) {
+  constructor(
+    sessions: AuthRepository,
+    sessionTTLMs: number,
+    playerIdSecret = "test-player-id-secret",
+  ) {
     this.#sessions = sessions;
     this.#sessionTTL = sessionTTLMs;
+    this.#playerIdSecret = playerIdSecret;
   }
 
-  async register(
-    email: string,
-    password: string,
+  async createOrResumeSession(
+    displayName: string,
+    clientIp: string,
     now: Date,
   ): Promise<IssuedSession> {
-    const normalized = normalizeCredentials(email, password);
-    // Avoid doing the expensive password hash twice for the common duplicate
-    // request path. The conditional write below remains the source of truth
-    // for concurrent registrations.
-    if (await this.#sessions.findAccountByEmail(normalized)) {
-      throw conflict("an account already exists for this email", {
-        code: "EMAIL_ALREADY_REGISTERED",
+    const username = normalizeUsername(displayName);
+    const normalizedIp = normalizeClientIp(clientIp);
+    if (!normalizedIp) {
+      throw internal("Client IP is unavailable.", {
+        code: "CLIENT_IP_UNAVAILABLE",
       });
     }
-    const passwordHash = await hashPassword(password);
+    if (this.#playerIdSecret === "") {
+      throw internal("Player identity secret is unavailable.", {
+        code: "INTERNAL_ERROR",
+      });
+    }
+    const playerId = await derivePlayerId(
+      username,
+      normalizedIp,
+      this.#playerIdSecret,
+    );
     const issued = await newToken();
     const expiresAt = new Date(now.getTime() + this.#sessionTTL);
-
-    const account: Account = {
-      id: newId(),
-      email: normalized,
-      passwordHash,
-      status: "ACTIVE",
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
+    const session = this.#newSession(
+      issued.digestHex,
+      playerId,
+      now,
+      expiresAt,
+    );
     const player: Player = {
-      id: newId(),
-      accountId: account.id,
+      id: playerId,
       publicId: newPlayerPublicId(),
+      displayName: displayName.trim(),
+      username,
       onboardingCompleted: false,
       locale: "en-US",
       timezone: "UTC",
@@ -66,54 +76,41 @@ export class AuthService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
-    const session = {
-      id: newId(),
-      accountId: account.id,
-      playerId: player.id,
-      tokenDigest: issued.digestHex,
-      expiresAt: expiresAt.toISOString(),
-      lastSeenAt: now.toISOString(),
-      rotatedAt: null,
-      replacedBySessionId: null,
-      revokedAt: null,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
 
-    const created = await this.#sessions.createRegistration(
-      account,
+    // The conditional transaction is the concurrency boundary. If another
+    // request won, its player is reused and only this request's session is new.
+    const created = await this.#sessions.createPlayerAndSession(
       player,
       session,
     );
     if (!created) {
-      throw conflict("an account already exists for this email", {
-        code: "EMAIL_ALREADY_REGISTERED",
-      });
+      const existing = await this.#sessions.findPlayer(playerId);
+      if (!existing) {
+        // A public-id collision is extraordinarily unlikely; retrying avoids
+        // turning a transient KV conflict into a duplicate player.
+        return this.createOrResumeSession(displayName, normalizedIp, now);
+      }
+      session.playerId = existing.id;
+      await this.#sessions.createSession(session);
     }
-    return { token: issued.token, expiresAt };
+    return { token: issued.token, expiresAt, created, playerId };
   }
 
-  async login(
-    email: string,
-    password: string,
+  async authenticate(rawToken: string, now: Date): Promise<Principal | null> {
+    const digest = await digestToken(rawToken);
+    return digest ? this.#sessions.findAuthenticatedSession(digest, now) : null;
+  }
+
+  #newSession(
+    tokenDigest: string,
+    playerId: string,
     now: Date,
-  ): Promise<IssuedSession> {
-    const normalized = normalizeCredentials(email, password);
-    const account = await this.#sessions.findAccountByEmail(normalized);
-    if (!account || !(await verifyPassword(account.passwordHash, password))) {
-      throw invalidCredentials();
-    }
-    const playerId = await this.#sessions.findPlayerIdByAccountId(account.id);
-    if (!playerId) {
-      throw invalidCredentials();
-    }
-    const issued = await newToken();
-    const expiresAt = new Date(now.getTime() + this.#sessionTTL);
-    const session = {
+    expiresAt: Date,
+  ): Session {
+    return {
       id: newId(),
-      accountId: account.id,
       playerId,
-      tokenDigest: issued.digestHex,
+      tokenDigest,
       expiresAt: expiresAt.toISOString(),
       lastSeenAt: now.toISOString(),
       rotatedAt: null,
@@ -122,48 +119,13 @@ export class AuthService {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
-    await this.#sessions.createSession(session);
-    return { token: issued.token, expiresAt };
   }
-
-  async authenticate(rawToken: string, now: Date): Promise<Principal | null> {
-    const digest = await digestToken(rawToken);
-    if (!digest) {
-      return null;
-    }
-    return this.#sessions.findAuthenticatedSession(digest, now);
-  }
-}
-
-function normalizeCredentials(email: string, password: string): string {
-  const normalized = email.toLowerCase().trim();
-  if (
-    normalized.length > maxEmailLength || !validEmail(normalized) ||
-    password.length < minPasswordLength
-  ) {
-    throw new TidekeepersError(
-      "invalid authentication input",
-      "invalid_request",
-      { code: "INVALID_AUTH_INPUT" },
-    );
-  }
-  return normalized;
-}
-
-function validEmail(email: string): boolean {
-  const at = email.lastIndexOf("@");
-  return at > 0 && at < email.length - 3 &&
-    email.split("@").length === 2 &&
-    !/[\s\t\r\n]/.test(email) &&
-    email.slice(at + 1).includes(".");
 }
 
 function newPlayerPublicId(): string {
   for (;;) {
     const bytes = crypto.getRandomValues(new Uint8Array(12));
     const id = "plr_" + base64UrlEncodeBytes(bytes);
-    if (id[4] !== "-" && id[4] !== "_") {
-      return id;
-    }
+    if (id[4] !== "-" && id[4] !== "_") return id;
   }
 }

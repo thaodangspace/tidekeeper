@@ -30,6 +30,12 @@ export function requestIdFromContext(c: Context): string {
   return c.get(requestIdKey) ?? "";
 }
 
+/** Connection metadata set by the trusted Deno.serve boundary. */
+export function clientIpFromContext(c: Context): string | null {
+  const env = c.env as { clientIp?: string | null } | undefined;
+  return env?.clientIp ?? null;
+}
+
 export function securityHeaders(
   c: Context,
   next: Next,
@@ -80,6 +86,9 @@ export function requireAuthentication(
   cookieName: string,
 ) {
   return async (c: Context, next: Next): Promise<Response | void> => {
+    // The protected router is mounted at root; do not turn unknown public
+    // paths (including removed auth endpoints) into authentication failures.
+    if (!new URL(c.req.url).pathname.startsWith("/api/")) return next();
     const cookieValue = c.req.header("cookie")?.match(
       new RegExp(`(?:^|;\\s*)${escapeRegExp(cookieName)}=([^;]+)`),
     )?.[1];

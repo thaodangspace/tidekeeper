@@ -23,15 +23,15 @@ import {
 } from "../utils/errors.ts";
 import {
   apiError,
+  clientIpFromContext,
   decodeJsonBody,
   principalFromContext,
 } from "./middleware.ts";
 
 const maxAuthRequestBytes = 8 << 10;
 
-interface CredentialsRequest {
-  email: string;
-  password: string;
+interface SessionRequest {
+  username: string;
 }
 
 export class AuthHandler {
@@ -52,49 +52,34 @@ export class AuthHandler {
     this.#cookieDomain = cookieDomain;
   }
 
-  register = async (c: Context): Promise<Response> => {
-    const credentials = await decodeCredentials(c);
-    if (!credentials) {
+  session = async (c: Context): Promise<Response> => {
+    const body = await decodeJsonBody<SessionRequest>(c, maxAuthRequestBytes);
+    if (!body || typeof body.username !== "string") {
       return writeAuthError(
         c,
         400,
-        "INVALID_AUTH_INPUT",
-        "Enter a valid email and password.",
+        "INVALID_PLAYER_NAME",
+        "Enter a name between 2 and 32 characters.",
       );
     }
-    try {
-      const session = await this.#auth.register(
-        credentials.email,
-        credentials.password,
-        new Date(),
-      );
-      this.#setSessionCookie(c, session);
-      c.header("Cache-Control", "no-store");
-      return c.body(null, 201);
-    } catch (err) {
-      return this.#respondError(c, err);
-    }
-  };
-
-  login = async (c: Context): Promise<Response> => {
-    const credentials = await decodeCredentials(c);
-    if (!credentials) {
+    const clientIp = clientIpFromContext(c);
+    if (!clientIp) {
       return writeAuthError(
         c,
-        400,
-        "INVALID_AUTH_INPUT",
-        "Enter a valid email and password.",
+        503,
+        "CLIENT_IP_UNAVAILABLE",
+        "Player identity is temporarily unavailable.",
       );
     }
     try {
-      const session = await this.#auth.login(
-        credentials.email,
-        credentials.password,
+      const issued = await this.#auth.createOrResumeSession(
+        body.username,
+        clientIp,
         new Date(),
       );
-      this.#setSessionCookie(c, session);
+      this.#setSessionCookie(c, issued);
       c.header("Cache-Control", "no-store");
-      return c.body(null, 204);
+      return c.body(null, issued.created ? 201 : 204);
     } catch (err) {
       return this.#respondError(c, err);
     }
@@ -102,21 +87,15 @@ export class AuthHandler {
 
   #respondError(c: Context, err: unknown): Response {
     if (err instanceof TidekeepersError) {
-      const status = statusCodeFor(err);
-      const code = err.code;
-      let message = "An unexpected error occurred.";
-      switch (code) {
-        case "INVALID_AUTH_INPUT":
-          message = "Enter a valid email and password.";
-          break;
-        case "EMAIL_ALREADY_REGISTERED":
-          message = "An account already exists for this email address.";
-          break;
-        case "INVALID_CREDENTIALS":
-          message = "Invalid email or password.";
-          break;
-      }
-      return writeAuthError(c, status, code, message);
+      const status = err.code === "CLIENT_IP_UNAVAILABLE"
+        ? 503
+        : statusCodeFor(err);
+      const message = err.code === "INVALID_PLAYER_NAME"
+        ? "Enter a name between 2 and 32 characters."
+        : err.code === "CLIENT_IP_UNAVAILABLE"
+        ? "Player identity is temporarily unavailable."
+        : "An unexpected error occurred.";
+      return writeAuthError(c, status, err.code, message);
     }
     return writeAuthError(
       c,
@@ -134,12 +113,8 @@ export class AuthHandler {
     let cookie = `${this.#cookieName}=${
       encodeURIComponent(session.token)
     }; Path=/; Expires=${session.expiresAt.toUTCString()}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax`;
-    if (this.#cookieSecure) {
-      cookie += "; Secure";
-    }
-    if (this.#cookieDomain !== "") {
-      cookie += `; Domain=${this.#cookieDomain}`;
-    }
+    if (this.#cookieSecure) cookie += "; Secure";
+    if (this.#cookieDomain !== "") cookie += `; Domain=${this.#cookieDomain}`;
     c.header("Set-Cookie", cookie);
   }
 }
@@ -160,6 +135,8 @@ export class MeHandler {
     c.header("Cache-Control", "private, no-store");
     return c.json({
       playerId: me.publicId,
+      displayName: me.displayName,
+      username: me.username,
       onboardingCompleted: me.onboardingCompleted,
       locale: me.locale,
       timezone: me.timezone,
@@ -802,18 +779,6 @@ async function decodeLineupRequest(
     });
   }
   return { expectedVersion: candidate.expectedVersion as number, slots };
-}
-
-async function decodeCredentials(
-  c: Context,
-): Promise<CredentialsRequest | null> {
-  const body = await decodeJsonBody<CredentialsRequest>(c, maxAuthRequestBytes);
-  if (
-    !body || typeof body.email !== "string" || typeof body.password !== "string"
-  ) {
-    return null;
-  }
-  return body;
 }
 
 export function writeAuthenticationRequired(c: Context): Response {

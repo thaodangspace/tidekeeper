@@ -26,6 +26,7 @@ import {
   runSettlementJob,
 } from "./src/jobs/cron.ts";
 import { createMarketProvider } from "./src/market/provider.ts";
+import { resolveClientIp } from "./src/http/client_ip.ts";
 
 const config = loadConfig();
 const logger = createLogger({
@@ -45,7 +46,11 @@ const voyageRepository = new VoyageRepository(store);
 const dailyRepository = new DailyRepository(store);
 const idempotencyRepository = new IdempotencyRepository(store);
 
-const auth = new AuthService(authRepository, config.session.ttlMs);
+const auth = new AuthService(
+  authRepository,
+  config.session.ttlMs,
+  config.playerIdSecret,
+);
 const players = new PlayerService(playerRepository);
 const daily = new DailyService(dailyRepository, voyageRepository);
 const voyages = new VoyageService(
@@ -109,10 +114,17 @@ Deno.cron("session cleanup", "0 * * * *", async () => {
 const url = parseAddress(config.http.address);
 logger.info("api starting", { address: config.http.address });
 
-const handler = async (request: Request): Promise<Response> => {
+const handler = async (
+  request: Request,
+  info: Deno.ServeHandlerInfo,
+): Promise<Response> => {
   const pathname = new URL(request.url).pathname;
   if (isApiPath(pathname)) {
-    return app.fetch(request, Deno.env);
+    const remoteAddr = "hostname" in info.remoteAddr
+      ? info.remoteAddr
+      : { hostname: "" };
+    const clientIp = resolveClientIp(request, remoteAddr, config.proxy);
+    return app.fetch(request, { clientIp });
   }
   return serveFrontend(request);
 };

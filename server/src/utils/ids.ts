@@ -53,8 +53,3 @@ export function newSessionToken(): { raw: Uint8Array; token: string } {
   const raw = crypto.getRandomValues(new Uint8Array(32));
   return { raw, token: base64UrlEncode(raw) };
 }
-
-/** Generates a random salt for password hashing (16 bytes). */
-export function newSalt(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(16));
-}

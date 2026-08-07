@@ -4,6 +4,8 @@ import type { PlayerRepository } from "../repositories/player_repository.ts";
 
 export interface Me {
   publicId: string;
+  displayName: string;
+  username: string;
   onboardingCompleted: boolean;
   locale: string;
   timezone: string;
@@ -36,6 +38,8 @@ export class PlayerService {
     }
     return {
       publicId: me.publicId,
+      displayName: me.displayName,
+      username: me.username,
       onboardingCompleted: me.onboardingCompleted,
       locale: me.locale,
       timezone: me.timezone,

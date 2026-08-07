@@ -32,6 +32,13 @@ export interface Config {
     provider: string;
     apiKey: string;
   };
+  /** HMAC secret used to derive opaque deterministic guest player ids. */
+  playerIdSecret: string;
+  /** Forwarding headers are read only when the deployment explicitly trusts its proxy. */
+  proxy: {
+    trusted: boolean;
+    header: string;
+  };
 }
 
 const ENVIRONMENTS: readonly string[] = [
@@ -124,6 +131,15 @@ export function loadConfig(
   }
 
   const cookieSecure = boolean(lookup, "SESSION_COOKIE_SECURE", true);
+  const playerIdSecret = environment === "local" || environment === "test"
+    ? value(lookup, "PLAYER_ID_SECRET", "local-development-player-id-secret")
+    : required(lookup, "PLAYER_ID_SECRET");
+  const trustedProxy = boolean(lookup, "TRUSTED_PROXY", false);
+  const trustedProxyHeader = value(
+    lookup,
+    "TRUSTED_PROXY_HEADER",
+    "x-forwarded-for",
+  );
   if (environment === "production" && !cookieSecure) {
     throw new Error("SESSION_COOKIE_SECURE must be true in production");
   }
@@ -186,6 +202,8 @@ export function loadConfig(
       provider: value(lookup, "MARKET_PROVIDER", "static"),
       apiKey: value(lookup, "MARKET_API_KEY", ""),
     },
+    playerIdSecret,
+    proxy: { trusted: trustedProxy, header: trustedProxyHeader },
   };
 }
 

@@ -2,6 +2,6 @@
 
 <main>
   <h1>Privacy policy</h1>
-  <p>We use your account information only to provide and secure your Tidekeepers voyage.</p>
-  <p><a href="/login">Return to sign in</a></p>
+  <p>We use your display name and session information only to provide and secure your Tidekeepers voyage.</p>
+  <p><a href="/login">Return to Tidekeepers</a></p>
 </main>
