@@ -180,7 +180,7 @@ export function loadConfig(
       address: value(
         lookup,
         "HTTP_ADDR",
-        `:${value(lookup, "PORT", "8000")}`,
+        `:${value(lookup, "PORT", "8026")}`,
       ),
       readTimeoutMs: integer(lookup, "HTTP_READ_TIMEOUT_MS", 10_000),
       writeTimeoutMs: integer(lookup, "HTTP_WRITE_TIMEOUT_MS", 15_000),

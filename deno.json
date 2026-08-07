@@ -4,7 +4,7 @@
   "exports": "./server/main.ts",
   "tasks": {
     "start": "deno run -A --unstable-kv --unstable-cron server/main.ts",
-    "dev": "deno run -A --watch --unstable-kv --unstable-cron server/main.ts",
+    "dev": "deno run --env-file=.env -A --watch --unstable-kv --unstable-cron server/main.ts",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
